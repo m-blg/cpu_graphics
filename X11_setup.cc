@@ -100,22 +100,12 @@ int main() {
 
         for (u32 i = 0u; i < window_size.y; i++) {
             for (u32 j = 0u; j < window_size.x; j++) {
-                window_buffer.get(i, j) = 0;
+                if (((i/100u) + (j/100u)) % 2 > 0) {
+                    window_buffer.get(i, j) = 0xffffffff;
+                } else {
+                    window_buffer.get(i, j) = 0;
+                }
             }
-        }
-
-
-        vec2i pointer_local_pos;
-        {
-            vec2i pointer_global_pos;
-            u32 pointer_mask;
-            Window temp1, temp2;
-            XQueryPointer(display, window, &temp1, &temp2, &pointer_global_pos.x, &pointer_global_pos.y, &pointer_local_pos.x, &pointer_local_pos.y, &pointer_mask);
-        }
-        if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-            draw_line_screen(window_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), {0xff55ffff});
-        for (i32 i = 0; i < 100; i++) {
-            draw_line_screen(window_buffer, {500, 100 + i}, {300, 600 + i}, {0xffff55ff + i});
         }
 
         XPutImage(display, window, default_gc, x_window_buffer, 0, 0, 0, 0, window_size.x, window_size.y);
