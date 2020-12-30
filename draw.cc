@@ -192,7 +192,7 @@ void plot_axes(dbuff2<u32> buffer, vec2<T> origin, Range<T> range_ox, Range<T> r
 
     for (f64 x = range_ox.first; x < range_ox.last; x += range_ox.step) {
         vec2d c_pos = origin + vec2d(1, 0) * x * scale.x;
-        draw_line(buffer, c_pos + vec2d(0, -1) * (mark_width / 2) * scale.y, c_pos + vec2d(0, 1) * (mark_width / 2) * scale.y, color, window_size, pixels_per_unit);
+        draw_line(buffer, c_pos + vec2d(0, -1) * (mark_width / 2), c_pos + vec2d(0, 1) * (mark_width / 2), color, window_size, pixels_per_unit);
     }
 }
 
