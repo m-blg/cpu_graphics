@@ -30,8 +30,8 @@ struct Rect {
 };
 
 template <typename T1, typename T2>
-bool rect_is_contained(Rect<T1> self, vec2<T2> p) {
-    return ( self.lb.x <= p.x && p.x <= self.rt.x && self.lb.y <= p.y && p.y <= self.rt.y);
+bool rect_is_contained(Rect<T1> rect, vec2<T2> p) {
+    return ( rect.lb.x <= p.x && p.x <= rect.rt.x && rect.lb.y <= p.y && p.y <= rect.rt.y);
 }
 
 
@@ -47,7 +47,19 @@ vec2i space_to_screen_coord(vec2d v, vec2i window_size, vec2i pixels_per_unit) {
     return {window_size.x / 2 + iround(v.x * pixels_per_unit.x), window_size.y / 2 - iround(v.y * pixels_per_unit.y)};
 }
 
-void draw_line_screen(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color) {
+
+static void raw_set_pixel_color(dbuff2u buffer, vec2u indexes, Color color) {
+    buffer.get(indexes.y, indexes.x) = color;
+}
+
+
+static void set_pixel_color(dbuff2u buffer, vec2u indexes, Color color) {
+    if (rect_is_contained<u32, u32>({{0, 0}, {buffer.x_cap - 1, buffer.y_cap - 1}}, indexes))
+        buffer.get(indexes.y, indexes.x) = color;
+}
+
+void draw_line_screen(dbuff2<u32> buffer, vec2u p1, vec2u p2, Color color, 
+                      u32& (*set_pixel_color_lmd)(dbuff2u, vec2u, Color)) {
     i32 delta_x = p2.x - p1.x;
     i32 delta_y = p2.y - p1.y;
 
@@ -55,9 +67,11 @@ void draw_line_screen(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color) {
         // delta_x zero case
         if (delta_x == 0) {
             for (u32 y = p1.y, x = p1.x; y != p2.y; y += sgn(delta_y)) {
-                buffer.get(y, x) = color;
+                //buffer.get(y, x) = color;
+                set_pixel_color_lmd(buffer, {x, y}, color);
             }
-            buffer.get(p2.y, p2.x) = color;
+            //buffer.get(p2.y, p2.x) = color;
+            set_pixel_color_lmd(buffer, p2, color);
             return;
         }
 
@@ -74,7 +88,8 @@ void draw_line_screen(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color) {
             for (u32 x = p1.x, y = p1.y; x != p2.x; x += sgn(delta_x)) {
                 buffer.get(y, x) = color;
             }
-            buffer.get(p2.y, p2.x) = color;
+            //buffer.get(p2.y, p2.x) = color;
+            set_pixel_color_lmd(buffer, p2, color);
             return;
         }
 
@@ -100,7 +115,7 @@ void draw_line(dbuff2<u32> buffer, vec2<T> p1, vec2<T> p2, Color color, vec2i wi
     p1_screen = {clamp(p1_screen.x, 0, window_size.x - 1), clamp(p1_screen.y, 0, window_size.y - 1)};
     p2_screen = {clamp(p2_screen.x, 0, window_size.x - 1), clamp(p2_screen.y, 0, window_size.y - 1)};
     
-    draw_line_screen(buffer, p1_screen, p2_screen, color);
+    draw_line_screen(buffer, p1_screen, p2_screen, color, r);
 }
 
 // Euclidean algorithm???
