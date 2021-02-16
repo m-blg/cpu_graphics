@@ -1,16 +1,50 @@
 #include <X11/Xlib.h>
 
 #include <X11/Xutil.h>
-#include "../cp_lib/basic.cc"
-#include "../cp_lib/array.cc"
-#include "../cp_lib/vector.cc"
-#include "../cp_lib/memory.cc"
+#include "../../cp_lib/basic.cc"
+#include "../../cp_lib/array.cc"
+#include "../../cp_lib/vector.cc"
+#include "../../cp_lib/memory.cc"
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "draw.cc"
+#include "../draw.cc"
+#include "wireframe_test.cc"
 
 using namespace cp;
+
+sbuff<vec3f, 8> cube_vertices = {{
+    { -1, -1, -1 },
+	{ 1, -1, -1 },
+	{ 1, 1, -1 },
+	{ -1, 1, -1 },
+	{ -1, 1, 1 },
+	{ 1, 1, 1 },
+	{ 1, -1, 1 },
+	{ -1, -1, 1 }
+}};
+sbuff<u32[3], 12> cube_triangles = {{
+    {0, 2, 1}, //face front
+    {0, 3, 2},
+    {2, 3, 4}, //face top
+    {2, 4, 5},
+    {1, 2, 5}, //face right
+    {1, 5, 6},
+    {0, 7, 4}, //face left
+    {0, 4, 3},
+    {5, 4, 7}, //face back
+    {5, 7, 6},
+    {0, 6, 7}, //face bottom
+    {0, 1, 6}
+}};
+
+Mesh cube_mesh = {{cube_vertices.buffer, cap(&cube_vertices)}, {cube_triangles.buffer, cap(&cube_triangles)}};
+
+vec3f cube_position = { 0, 0, 3};
+quat cube_rotation = {1, 0, 0, 0};
+
+bool is_ortho = true;
+
 
 void x_shutdown(Display* display, Window *window) {
     XDestroyWindow(display, *window);
@@ -31,6 +65,13 @@ void x_set_size_hint(Display* display, Window *window, vec2i min_size, vec2i max
 }
 
 int main() {
+
+    dbuff<vec2f> _proj_buffer;
+    _proj_buffer.init(8);
+
+
+
+
     Display* display = XOpenDisplay(0);
     i32 screen = XDefaultScreen(display);
     Window root = XDefaultRootWindow(display);
@@ -92,6 +133,22 @@ int main() {
                     if (key_event->keycode == XKeysymToKeycode(display, XK_q)) {
                         is_running = false;
                     }
+                    if (key_event->keycode == XKeysymToKeycode(display, XK_o)) {
+                        is_ortho = !is_ortho;
+                    }
+
+                    if (key_event->keycode == XKeysymToKeycode(display, XK_w)) {
+                        cube_position += vec3f(0, 0, 0.1);
+                    }
+                    if (key_event->keycode == XKeysymToKeycode(display, XK_s)) {
+                        cube_position += vec3f(0, 0, -0.1);
+                    }
+                    if (key_event->keycode == XKeysymToKeycode(display, XK_a)) {
+                        cube_position += vec3f(-0.1, 0, 0);
+                    }
+                    if (key_event->keycode == XKeysymToKeycode(display, XK_d)) {
+                        cube_position += vec3f(0.1, 0, 0);
+                    }
                 } break;
             }
         }
@@ -113,10 +170,27 @@ int main() {
             XQueryPointer(display, window, &temp1, &temp2, &pointer_global_pos.x, &pointer_global_pos.y, &pointer_local_pos.x, &pointer_local_pos.y, &pointer_mask);
         }
         if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-            draw_line_screen(window_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), {0xff55ffff});
-        for (i32 i = 0; i < 100; i++) {
-            draw_line_screen(window_buffer, {500, 100 + i}, {300, 600 + i}, {0xffff55ff + i});
+            rasterize_line(window_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), {0xff55ffff}, set_pixel_color);
+        
+        if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
+            rasterize_triangle_scanline(window_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff5555ff}, set_pixel_color);
+        // for (i32 i = 1; i < 200; i++) {
+        //     rasterize_line(window_buffer, {1800, 100 + i}, {300, 900 + i}, {0xffff55ff + i}, set_pixel_color);
+        // }
+
+        if (is_ortho) {
+            render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
+                        window_buffer, {0xffffffff}, window_size, {100, 100});
+        } else {
+            render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
+                        window_buffer, {0xffffffff}, window_size, {100, 100});
         }
+        
+
+        static quat rot;
+        rot.init(normalized(vec3f{1, 1, 1}), M_PI/1000);
+        cube_rotation = rot * cube_rotation;
+
 
         XPutImage(display, window, default_gc, x_window_buffer, 0, 0, 0, 0, window_size.x, window_size.y);
 

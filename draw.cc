@@ -1,3 +1,4 @@
+#pragma once
 
 #include "../cp_lib/basic.cc"
 #include "../cp_lib/buffer.cc"
@@ -14,12 +15,13 @@ template <typename T> int sgn(T val) {
 
 union Color {
     u32 value;
-    struct {
-        u8 a, r, g, b;
-    };
+    vec4<u8> v;
 
     operator u32() {
         return value;
+    }
+    operator vec4<u8>() {
+        return v;
     }
 };
 
@@ -43,7 +45,7 @@ i32 iround(T value) {
 vec2i space_to_screen_coord(vec2i v, vec2i window_size, vec2i pixels_per_unit) {
     return {window_size.x / 2 + v.x * pixels_per_unit.x, window_size.y / 2 - v.y * pixels_per_unit.y};
 }
-vec2i space_to_screen_coord(vec2d v, vec2i window_size, vec2i pixels_per_unit) {
+vec2i space_to_screen_coord(vec2f v, vec2i window_size, vec2i pixels_per_unit) {
     return {window_size.x / 2 + iround(v.x * pixels_per_unit.x), window_size.y / 2 - iround(v.y * pixels_per_unit.y)};
 }
 
@@ -58,50 +60,62 @@ static void set_pixel_color(dbuff2u buffer, vec2u indexes, Color color) {
         buffer.get(indexes.y, indexes.x) = color;
 }
 
-void draw_line_screen(dbuff2<u32> buffer, vec2u p1, vec2u p2, Color color, 
-                      u32& (*set_pixel_color_lmd)(dbuff2u, vec2u, Color)) {
+void draw_line_screen_(dbuff2<u32> buffer, vec2u p1, vec2u p2, Color color, 
+                      void (*set_pixel_color_lmd)(dbuff2u, vec2u, Color)) {
+    
+    if (p1 == p2) {
+        set_pixel_color_lmd(buffer, p2, color);
+        return;
+    }
+    
     i32 delta_x = p2.x - p1.x;
     i32 delta_y = p2.y - p1.y;
 
     if (abs(delta_x) > abs(delta_y)) {
-        // delta_x zero case
-        if (delta_x == 0) {
-            for (u32 y = p1.y, x = p1.x; y != p2.y; y += sgn(delta_y)) {
-                //buffer.get(y, x) = color;
-                set_pixel_color_lmd(buffer, {x, y}, color);
-            }
-            //buffer.get(p2.y, p2.x) = color;
-            set_pixel_color_lmd(buffer, p2, color);
-            return;
-        }
 
         f32 k = (f32)delta_y / delta_x;
 
         for (i32 x1 = 0; x1 != delta_x; x1 += sgn(delta_x)) {
             i32 y1 = round(k * x1);
-            buffer.get(p1.y + y1, p1.x + x1) = color;
+            //buffer.get(p1.y + y1, p1.x + x1) = color;
+            set_pixel_color_lmd(buffer, {p1.x + x1, p1.y + y1}, color);
         }
 
     } else {
-        // delta_y zero case
-        if (delta_y == 0) {
-            for (u32 x = p1.x, y = p1.y; x != p2.x; x += sgn(delta_x)) {
-                buffer.get(y, x) = color;
-            }
-            //buffer.get(p2.y, p2.x) = color;
-            set_pixel_color_lmd(buffer, p2, color);
-            return;
-        }
 
         f32 k = (f32)delta_x / delta_y;
 
         for (i32 y1 = 0; y1 != delta_y; y1 += sgn(delta_y)) {
             i32 x1 = round(k * y1);
-            buffer.get(p1.y + y1, p1.x + x1) = color;
+            //buffer.get(p1.y + y1, p1.x + x1) = color;
+            set_pixel_color_lmd(buffer, {p1.x + x1, p1.y + y1}, color);
         }
     }
 
-    buffer.get(p2.y, p2.x) = color;
+    //buffer.get(p2.y, p2.x) = color;
+    set_pixel_color_lmd(buffer, p2, color);
+}
+
+
+void rasterize_line(dbuff2<u32> buffer, vec2u p1, vec2u p2, Color color, 
+                      void (*set_pixel_color_lmd)(dbuff2u, vec2u, Color)) {
+    if (p1 == p2) {
+        set_pixel_color_lmd(buffer, p2, color);
+        return;
+    }
+    
+    i32 delta_x = p2.x - p1.x;
+    i32 delta_y = p2.y - p1.y;
+
+    f32 delta_t = 1.0f / max(abs(delta_x), abs(delta_y));
+    
+    for (f32 t = 0; t < 1; t += delta_t) {
+        i32 x1 = round(delta_x * t);
+        i32 y1 = round(delta_y * t);
+        set_pixel_color_lmd(buffer, {p1.x + x1, p1.y + y1}, color);
+    }
+
+    set_pixel_color_lmd(buffer, p2, color);
 }
 
 template <typename T>
@@ -109,13 +123,65 @@ void draw_line(dbuff2<u32> buffer, vec2<T> p1, vec2<T> p2, Color color, vec2i wi
     vec2i p1_screen = space_to_screen_coord(p1, window_size, pixels_per_unit);
     vec2i p2_screen = space_to_screen_coord(p2, window_size, pixels_per_unit);
 
-    // if (!rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p1_screen) && 
-    //     !rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p2_screen)) return;
+    if (!rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p1_screen) || 
+        !rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p2_screen)) {
+            rasterize_line(buffer, (vec2u)p1_screen, (vec2u)p2_screen, color, set_pixel_color);
+        } else {
+            rasterize_line(buffer, (vec2u)p1_screen, (vec2u)p2_screen, color, raw_set_pixel_color);
+        }
+}
 
-    p1_screen = {clamp(p1_screen.x, 0, window_size.x - 1), clamp(p1_screen.y, 0, window_size.y - 1)};
-    p2_screen = {clamp(p2_screen.x, 0, window_size.x - 1), clamp(p2_screen.y, 0, window_size.y - 1)};
-    
-    draw_line_screen(buffer, p1_screen, p2_screen, color, r);
+void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p2, Color color, 
+                      void (*set_pixel_color_lmd)(dbuff2u, vec2u, Color)) {
+    if (p0.y < p1.y) {swap(&p0, &p1);} else if (p0.y == p1.y && p0.x > p1.x) {swap(&p0, &p1);}
+    if (p0.y < p2.y) {swap(&p0, &p2);} else if (p0.y == p2.y && p0.x > p2.x) {swap(&p0, &p2);}
+    if (p1.y < p2.y) {swap(&p1, &p2);} else if (p1.y == p2.y && p1.x > p2.x) {swap(&p1, &p2);}
+
+    bool is_right_bended = (cross(p2 - p0, p1 - p0) > 0);
+
+    vec2i p3 = { (p2.x - p0.x) / (p2.y - p0.y) * (p1.y - p0.y) + p0.x, p1.y};
+
+    vec2i dir01 = p1 - p0; 
+    vec2i dir03 = p3 - p0; 
+
+    f32 delta_t = 1.0f / max(max(abs(dir01.x), abs(dir03.x)), max(abs(dir01.y), abs(dir03.y)));
+
+    for (f32 t = 0; t < 1; t += delta_t) {
+        i32 x0, y0, x1;
+        if (is_right_bended) {
+            x0 = round(dir03.x * t);
+            y0 = round(dir03.y * t);
+            x1 = round(dir01.x * t);
+        } else {
+            x0 = round(dir01.x * t);
+            y0 = round(dir01.y * t);
+            x1 = round(dir03.x * t);
+        }
+        for (i32 x = x0; x <= x1; x++) {
+            set_pixel_color_lmd(buffer, {p0.x + x, p0.y + y0}, color);
+        }
+    }
+
+    vec2i dir21 = p1 - p2; 
+    vec2i dir23 = p3 - p2; 
+
+    delta_t = 1.0f / max(max(abs(dir21.x), abs(dir23.x)), max(abs(dir21.y), abs(dir23.y)));
+
+    for (f32 t = 0; t < 1; t += delta_t) {
+        i32 x0, y0, x1;
+        if (is_right_bended) {
+            x0 = round(dir23.x * t);
+            y0 = round(dir23.y * t);
+            x1 = round(dir21.x * t);
+        } else {
+            x0 = round(dir21.x * t);
+            y0 = round(dir21.y * t);
+            x1 = round(dir23.x * t);
+        }
+        for (i32 x = x0; x <= x1; x++) {
+            set_pixel_color_lmd(buffer, {p2.x + x, p2.y + y0}, color);
+        }
+    }
 }
 
 // Euclidean algorithm???
