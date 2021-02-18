@@ -69,7 +69,8 @@ int main() {
     dbuff<vec2f> _proj_buffer;
     _proj_buffer.init(8);
 
-
+    dbuffi proc_buffer;
+    proc_buffer.init(2000);
 
 
     Display* display = XOpenDisplay(0);
@@ -173,7 +174,7 @@ int main() {
             rasterize_line(window_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), {0xff55ffff}, set_pixel_color);
         
         if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-            rasterize_triangle_scanline(window_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff5555ff}, set_pixel_color);
+            rasterize_triangle_scanline(window_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff5555ff}, proc_buffer, set_pixel_color);
         // for (i32 i = 1; i < 200; i++) {
         //     rasterize_line(window_buffer, {1800, 100 + i}, {300, 900 + i}, {0xffff55ff + i}, set_pixel_color);
         // }
