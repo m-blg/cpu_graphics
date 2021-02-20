@@ -66,11 +66,18 @@ void x_set_size_hint(Display* display, Window *window, vec2i min_size, vec2i max
 
 int main() {
 
-    dbuff<vec2f> _proj_buffer;
+    dbuff<vec3f> _proj_buffer;
     _proj_buffer.init(8);
 
-    dbuffi proc_buffer;
-    proc_buffer.init(2000);
+    dbuff<u8> proc_buffer;
+    proc_buffer.init(80000);
+
+    float line_color[2][4] = {{1, 0.9, 0, 0.9}, {1, 0, 0.9, 0.9}};
+    dbuff2f line_color_buffer = {(f32*)line_color, 2, 4};
+
+    // float triangle_color[3][4] = {{1, 0.9, 0, 0.9}, {1, 0, 0.9, 0.9}, {1, 0.9, 0.9, 0}};
+    float triangle_color[3][4] = {{1, 1, 0, 0}, {1, 0, 0, 1}, {1, 0, 1, 0}};
+    dbuff2f triangle_color_buffer = {(f32*)triangle_color, 3, 4};
 
 
     Display* display = XOpenDisplay(0);
@@ -104,8 +111,11 @@ int main() {
 
     // create buffer
 
-    dbuff2<u32> window_buffer;
+    dbuff2u window_buffer;
     window_buffer.init(window_max_size.y, window_max_size.x);
+    dbuff2f z_buffer;
+    z_buffer.init(window_max_size.y, window_max_size.x);
+    
     XImage* x_window_buffer = XCreateImage(display, visual_info.visual, visual_info.depth, ZPixmap, 0, (char*)window_buffer.buffer, window_max_size.x, window_max_size.y, sizeof(u32) * 8, 0);
 
 
@@ -153,7 +163,6 @@ int main() {
                 } break;
             }
         }
-
         // write to buffer
 
         for (u32 i = 0u; i < window_size.y; i++) {
@@ -161,8 +170,13 @@ int main() {
                 window_buffer.get(i, j) = 0;
             }
         }
+        for (u32 i = 0u; i < window_size.y; i++) {
+            for (u32 j = 0u; j < window_size.x; j++) {
+                z_buffer.get(i, j) = INT_MAX;
+            }
+        }
 
-
+        // Color c = {0xff5533ff};
         vec2i pointer_local_pos;
         {
             vec2i pointer_global_pos;
@@ -170,21 +184,37 @@ int main() {
             Window temp1, temp2;
             XQueryPointer(display, window, &temp1, &temp2, &pointer_global_pos.x, &pointer_global_pos.y, &pointer_local_pos.x, &pointer_local_pos.y, &pointer_mask);
         }
-        if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-            rasterize_line(window_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), {0xff55ffff}, set_pixel_color);
+        // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
+        //     rasterize_line(window_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), 
+        //     line_color_buffer, color_itpl_frag_shader, null, set_pixel_color);
         
+        // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
+        //     rasterize_triangle_scanline(window_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff00ff00}, proc_buffer, set_pixel_color);
+
         if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-            rasterize_triangle_scanline(window_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff5555ff}, proc_buffer, set_pixel_color);
+            rasterize_triangle_scanline(window_buffer, {500, 500}, {300, 200}, pointer_local_pos, 
+                triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
+
+        // rasterize_triangle_scanline(window_buffer, {500, 500}, {300, 200}, {700, 600}, 
+        //         triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
+
         // for (i32 i = 1; i < 200; i++) {
         //     rasterize_line(window_buffer, {1800, 100 + i}, {300, 900 + i}, {0xffff55ff + i}, set_pixel_color);
         // }
 
+        // if (is_ortho) {
+        //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
+        //                 window_buffer, {0xffffffff}, window_size, {100, 100});
+        // } else {
+        //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
+        //                 window_buffer, {0xffffffff}, window_size, {100, 100});
+        // }
         if (is_ortho) {
             render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
-                        window_buffer, {0xffffffff}, window_size, {100, 100});
+                        window_buffer, z_buffer, window_size, {100, 100});
         } else {
             render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
-                        window_buffer, {0xffffffff}, window_size, {100, 100});
+                        window_buffer, z_buffer, window_size, {100, 100});
         }
         
 

@@ -17,6 +17,11 @@ union Color {
     u32 value;
     vec4<u8> v;
 
+    void init_vf(vec4f _v) {
+        v = vec4<u8>((u32)round(255 * _v.b), (u32)round(255 * _v.g), 
+                    (u32)round(255 * _v.r), (u32)round(255 * _v.a));
+    }
+
     operator u32() {
         return value;
     }
@@ -24,6 +29,18 @@ union Color {
         return v;
     }
 };
+
+
+Color to_color(vec4f _v) {
+    Color c; c.init_vf(_v);
+    c.v = vec4<u8>((u32)round(255 * _v.b), (u32)round(255 * _v.g), 
+                (u32)round(255 * _v.r), (u32)round(255 * _v.a));
+    return c;
+}
+
+vec4f to_vf(Color color) {
+    return {(f32)color.v.a / 255.0f, (f32)color.v.r / 255.0f, (f32)color.v.g / 255.0f, (f32)color.v.b / 255.0f };
+}
 
 template <typename T>
 struct Rect {
@@ -60,7 +77,7 @@ static void set_pixel_color(dbuff2u buffer, vec2i indexes, Color color) {
         buffer.get(indexes.y, indexes.x) = color;
 }
 
-void draw_line_screen_(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color, 
+void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color, 
                       void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
     
     if (p1 == p2) {
@@ -97,7 +114,8 @@ void draw_line_screen_(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color,
 }
 
 
-void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color, 
+//slow
+void rasterize_line_parametric(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color, 
                       void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
     if (p1 == p2) {
         set_pixel_color_lmd(buffer, p2, color);
@@ -118,8 +136,60 @@ void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color color,
     set_pixel_color_lmd(buffer, p2, color);
 }
 
-template <typename T>
-void draw_line(dbuff2<u32> buffer, vec2<T> p1, vec2<T> p2, Color color, vec2i window_size, vec2i pixels_per_unit) { 
+void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
+                      void (*fragment_shader_lmd)(dbuff2u, vec2i, dbufff, void*, void (dbuff2u, vec2i, Color)), 
+                      void* frag_shader_args, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
+    if (p1 == p2) {
+        fragment_shader_lmd(buffer, p2, {itpl_buffer.buffer, itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
+        return;
+    }
+    
+    i32 delta_x = p2.x - p1.x;
+    i32 delta_y = p2.y - p1.y;
+
+    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
+    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
+
+    memcpy(cur_itpl_buffer.buffer, itpl_buffer.buffer, sizeof(f32) * cap(&cur_itpl_buffer));
+
+    if (abs(delta_x) > abs(delta_y)) {
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer.get(1, i) - itpl_buffer.get(0, i)) / abs(delta_x);
+        }
+
+        f32 k = (f32)delta_y / delta_x;
+
+        for (i32 x1 = 0; x1 != delta_x; x1 += sgn(delta_x)) {
+            for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+            }
+
+            i32 y1 = round(k * x1);
+            fragment_shader_lmd(buffer, {p1.x + x1, p1.y + y1}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+        }
+
+    } else {
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer.get(1, i) - itpl_buffer.get(0, i)) / abs(delta_y);
+        }
+
+        f32 k = (f32)delta_x / delta_y;
+
+        for (i32 y1 = 0; y1 != delta_y; y1 += sgn(delta_y)) {
+            for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+            }
+
+            i32 x1 = round(k * y1);
+            fragment_shader_lmd(buffer, {p1.x + x1, p1.y + y1}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+        }
+    }
+
+    fragment_shader_lmd(buffer, p2, {itpl_buffer.buffer + itpl_buffer.x_cap, itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
+}
+
+
+void draw_line(dbuff2<u32> buffer, vec2f p1, vec2f p2, Color color, vec2i window_size, vec2i pixels_per_unit) { 
     vec2i p1_screen = space_to_screen_coord(p1, window_size, pixels_per_unit);
     vec2i p2_screen = space_to_screen_coord(p2, window_size, pixels_per_unit);
 
@@ -128,6 +198,22 @@ void draw_line(dbuff2<u32> buffer, vec2<T> p1, vec2<T> p2, Color color, vec2i wi
             rasterize_line(buffer, (vec2u)p1_screen, (vec2u)p2_screen, color, set_pixel_color);
         } else {
             rasterize_line(buffer, (vec2u)p1_screen, (vec2u)p2_screen, color, raw_set_pixel_color);
+        }
+}
+
+void draw_line(dbuff2<u32> buffer, vec2f p1, vec2f p2, dbuff2f itpl_buffer,
+                      void (*fragment_shader_lmd)(dbuff2u, vec2i, dbufff, void*, void (dbuff2u, vec2i, Color)), 
+                      void* frag_shader_args, vec2i window_size, vec2i pixels_per_unit) { 
+    vec2i p1_screen = space_to_screen_coord(p1, window_size, pixels_per_unit);
+    vec2i p2_screen = space_to_screen_coord(p2, window_size, pixels_per_unit);
+
+    if (!rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p1_screen) || 
+        !rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p2_screen)) {
+            rasterize_line(buffer, p1_screen, p2_screen, 
+                itpl_buffer, fragment_shader_lmd, frag_shader_args, set_pixel_color);
+        } else {
+            rasterize_line(buffer, p1_screen, p2_screen, 
+                itpl_buffer, fragment_shader_lmd, frag_shader_args, raw_set_pixel_color);
         }
 }
 
@@ -245,7 +331,7 @@ void write_slope_x_bound(dbuff<i32> out_bounds, vec2i p1, vec2i p2) {
 
 
 void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p2, Color color, 
-        dbuffi proc_buffer, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
+        dbuff<u8> proc_buffer, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
     // sort points by y coordinate p0 - top one, p1 - middle, p2 - bottom
     if (p0.y > p1.y) {swap(&p0, &p1);} else if (p0.y == p1.y && p0.x > p1.x) {swap(&p0, &p1);}
     if (p0.y > p2.y) {swap(&p0, &p2);} else if (p0.y == p2.y && p0.x > p2.x) {swap(&p0, &p2);}
@@ -258,21 +344,22 @@ void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p
     i32 short_top_edge_hight = p1.y - p0.y;
     i32 short_bottom_edge_hight = p2.y - p1.y;
 
+    dbuffi bound_buffer = {(i32*)proc_buffer.buffer, 2 * (u32)long_edge_hight};
 
     if (is_right_bended) {
-        write_slope_x_bound(proc_buffer, p0, p2); 
-        write_slope_x_bound({proc_buffer.buffer + long_edge_hight, proc_buffer.cap}, p0, p1); 
-        write_slope_x_bound({proc_buffer.buffer + long_edge_hight + short_top_edge_hight, proc_buffer.cap}, p1, p2); 
+        write_slope_x_bound(bound_buffer, p0, p2); 
+        write_slope_x_bound({bound_buffer.buffer + long_edge_hight, bound_buffer.cap}, p0, p1); 
+        write_slope_x_bound({bound_buffer.buffer + long_edge_hight + short_top_edge_hight, bound_buffer.cap}, p1, p2); 
 
     } else {
-        write_slope_x_bound(proc_buffer, p0, p1); 
-        write_slope_x_bound({proc_buffer.buffer + short_top_edge_hight, proc_buffer.cap}, p1, p2); 
-        write_slope_x_bound({proc_buffer.buffer + long_edge_hight, proc_buffer.cap}, p0, p2); 
+        write_slope_x_bound(bound_buffer, p0, p1); 
+        write_slope_x_bound({bound_buffer.buffer + short_top_edge_hight, bound_buffer.cap}, p1, p2); 
+        write_slope_x_bound({bound_buffer.buffer + long_edge_hight, bound_buffer.cap}, p0, p2); 
     }
 
     if (p0.y < p1.y) {
         for (i32 y = 0; y < short_top_edge_hight; y++) {
-            for (i32 x = proc_buffer[y]; x <= proc_buffer[long_edge_hight + y]; x++) {
+            for (i32 x = bound_buffer[y]; x <= bound_buffer[long_edge_hight + y]; x++) {
                 set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
             }
         }
@@ -280,11 +367,198 @@ void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p
 
     if (p1.y < p2.y) {
         for (i32 y = short_top_edge_hight; y < long_edge_hight; y++) {
-            for (i32 x = proc_buffer[y]; x <= proc_buffer[long_edge_hight + y]; x++) {
+            for (i32 x = bound_buffer[y]; x <= bound_buffer[long_edge_hight + y]; x++) {
                 set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
             }
         }
     }
+}
+
+
+void write_slope_x_bound(dbuffi out_bounds, dbuff2f out_slope_itpl_buffer, 
+        vec2i p1, vec2i p2, dbufff itpl_buffer_from, dbufff itpl_buffer_to) {
+    if (p1 == p2) {
+        out_bounds[0] = p1.x;
+
+        // write interpolation data
+        for (u32 i = 0; i < cap(&itpl_buffer_from); i++) {
+            out_slope_itpl_buffer.get(0, i) = itpl_buffer_from[i];
+        }
+        return;
+    }
+    
+    i32 delta_x = p2.x - p1.x;
+    i32 delta_y = p2.y - p1.y;
+
+    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer_from.cap), itpl_buffer_from.cap};
+    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer_from.cap), itpl_buffer_from.cap};
+
+    memcpy(cur_itpl_buffer.buffer, itpl_buffer_from.buffer, sizeof(f32) * cap(&cur_itpl_buffer));
+
+    if (abs(delta_x) > abs(delta_y)) {
+        // calculate delta vector
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer_to[i] - itpl_buffer_from[i]) / abs(delta_x);
+        }
+
+        f32 k = (f32)delta_y / delta_x;
+
+        i32 prev_y1 = INT_MIN;
+        for (i32 x1 = 0; x1 != delta_x; x1 += sgn(delta_x)) {
+            // update current interpolation buffer
+            for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+            }
+
+            i32 y1 = round(k * x1);
+
+            if (y1 != prev_y1) {
+                out_bounds[y1] = p1.x + x1;
+                // write interpolation data
+                for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                    out_slope_itpl_buffer.get(y1, i) = cur_itpl_buffer[i];
+                }
+                prev_y1 = y1;
+            }
+        }
+
+    } else {
+        // calculate delta vector
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer_to[i] - itpl_buffer_from[i]) / abs(delta_y);
+        }
+
+        f32 k = (f32)delta_x / delta_y;
+
+        for (i32 y1 = 0; y1 != delta_y; y1 += sgn(delta_y)) {
+            // update current interpolation buffer
+            for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+            }
+
+            i32 x1 = round(k * y1);
+            
+            out_bounds[y1] = p1.x + x1;
+            // write interpolation data
+            for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                out_slope_itpl_buffer.get(y1, i) = cur_itpl_buffer[i];
+            }
+        }
+    }
+
+    out_bounds[delta_y] = p2.x;
+
+    // write interpolation data
+    for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+        out_slope_itpl_buffer.get(delta_y, i) = cur_itpl_buffer[i];
+    }
+
+}
+
+
+
+void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
+                    void (*fragment_shader_lmd)(dbuff2u, vec2i, dbufff, void*, void (dbuff2u, vec2i, Color)), 
+                    void* frag_shader_args, dbuff<u8> proc_buffer, 
+                    void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
+
+    sbuff<f32*, 3> itpl_buffer_p = {&itpl_buffer.get(0, 0), &itpl_buffer.get(1, 0), &itpl_buffer.get(2, 0)};
+    // sort points by y coordinate p0 - top one, p1 - middle, p2 - bottom
+    if (p0.y > p1.y) {swap(&p0, &p1); swap(&itpl_buffer_p[0], &itpl_buffer_p[1]);} 
+    else if (p0.y == p1.y && p0.x > p1.x) {swap(&p0, &p1); swap(&itpl_buffer_p[0], &itpl_buffer_p[1]);}
+    if (p0.y > p2.y) {swap(&p0, &p2); swap(&itpl_buffer_p[0], &itpl_buffer_p[2]);} 
+    else if (p0.y == p2.y && p0.x > p2.x) {swap(&p0, &p2); swap(&itpl_buffer_p[0], &itpl_buffer_p[2]);}
+    if (p1.y > p2.y) {swap(&p1, &p2); swap(&itpl_buffer_p[1], &itpl_buffer_p[2]);} 
+    else if (p1.y == p2.y && p1.x > p2.x) {swap(&p1, &p2); swap(&itpl_buffer_p[1], &itpl_buffer_p[2]);}
+
+    // find on which side is the bend is
+    bool is_right_bended = (cross(p2 - p0, p1 - p0) < 0);
+
+    i32 long_edge_hight = p2.y - p0.y;
+    i32 short_top_edge_hight = p1.y - p0.y;
+    i32 short_bottom_edge_hight = p2.y - p1.y;
+
+    dbuffi bound_buffer = {(i32*)proc_buffer.buffer, 2 * (u32)long_edge_hight};
+    dbuff2f slope_itpl_buffer = {(f32*)(proc_buffer.buffer + 2 * (u32)long_edge_hight * sizeof(i32)), 2 * (u32)long_edge_hight, itpl_buffer.x_cap };
+    assert(( "Not enough memory", proc_buffer.cap >= bound_buffer.cap * sizeof(i32) + total_cap(&slope_itpl_buffer) * sizeof(f32) ));
+
+    if (is_right_bended) {
+        write_slope_x_bound(bound_buffer, slope_itpl_buffer, p0, p2, 
+                {&itpl_buffer_p[0][0], itpl_buffer.x_cap}, {&itpl_buffer_p[2][0], itpl_buffer.x_cap}); 
+
+        write_slope_x_bound({bound_buffer.buffer + long_edge_hight, bound_buffer.cap}, 
+                {&slope_itpl_buffer.get(long_edge_hight, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
+                p0, p1, {&itpl_buffer_p[0][0], itpl_buffer.x_cap}, {&itpl_buffer_p[1][0], itpl_buffer.x_cap}); 
+
+        write_slope_x_bound({bound_buffer.buffer + long_edge_hight + short_top_edge_hight, bound_buffer.cap}, 
+                {&slope_itpl_buffer.get(long_edge_hight + short_top_edge_hight, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
+                p1, p2, {&itpl_buffer_p[1][0], itpl_buffer.x_cap}, {&itpl_buffer_p[2][0], itpl_buffer.x_cap}); 
+    } else {
+        write_slope_x_bound(bound_buffer, slope_itpl_buffer, p0, p1, 
+                {&itpl_buffer_p[0][0], itpl_buffer.x_cap}, {&itpl_buffer_p[1][0], itpl_buffer.x_cap}); 
+
+        write_slope_x_bound({bound_buffer.buffer + short_top_edge_hight, bound_buffer.cap}, 
+                {&slope_itpl_buffer.get(short_top_edge_hight, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
+                p1, p2, {&itpl_buffer_p[1][0], itpl_buffer.x_cap}, {&itpl_buffer_p[2][0], itpl_buffer.x_cap}); 
+
+        write_slope_x_bound({bound_buffer.buffer + long_edge_hight, bound_buffer.cap}, 
+                {&slope_itpl_buffer.get(long_edge_hight, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
+                p0, p2, {&itpl_buffer_p[0][0], itpl_buffer.x_cap}, {&itpl_buffer_p[2][0], itpl_buffer.x_cap}); 
+    }
+
+
+    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
+    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
+
+
+    if (p0.y < p1.y) {
+        for (i32 y = 0; y < short_top_edge_hight; y++) {
+            memcpy(cur_itpl_buffer.buffer, &slope_itpl_buffer.get(y, 0), sizeof(f32) * cap(&cur_itpl_buffer));
+            f32 delta_x = bound_buffer[long_edge_hight + y] - bound_buffer[y];
+            for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+                cur_itpl_deltas[i] = (slope_itpl_buffer.get(long_edge_hight + y, i) - slope_itpl_buffer.get(y, i)) / abs(delta_x);
+            }
+
+            for (i32 x = bound_buffer[y]; x < bound_buffer[long_edge_hight + y]; x++) {
+                // update current interpolation vector
+                for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                    cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+                }
+
+                //set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
+                fragment_shader_lmd(buffer, {x, p0.y + y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+            }
+        }
+    }
+
+    if (p1.y < p2.y) {
+        for (i32 y = short_top_edge_hight; y < long_edge_hight; y++) {
+            // write start interpolation vector to current interpolation vector
+            memcpy(cur_itpl_buffer.buffer, &slope_itpl_buffer.get(y, 0), sizeof(f32) * cap(&cur_itpl_buffer));
+
+            f32 delta_x = bound_buffer[long_edge_hight + y] - bound_buffer[y];
+            // calculate delta vector
+            for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+                cur_itpl_deltas[i] = (slope_itpl_buffer.get(long_edge_hight + y, i) - slope_itpl_buffer.get(y, i)) / abs(delta_x);
+            }
+
+            for (i32 x = bound_buffer[y]; x < bound_buffer[long_edge_hight + y]; x++) {
+                // update current interpolation vector
+                for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                    cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+                }
+
+                //set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
+                fragment_shader_lmd(buffer, {x, p0.y + y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+            }
+        }
+    }
+}
+
+inline void color_itpl_frag_shader(dbuff2u out_buffer, vec2i p, dbufff itpl_buffer, 
+                    void* args, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
+    Color c; c.init_vf({itpl_buffer[3], itpl_buffer[2], itpl_buffer[1], itpl_buffer[0]});
+    set_pixel_color_lmd(out_buffer, p, c);
 }
 
 
