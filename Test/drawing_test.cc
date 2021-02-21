@@ -165,15 +165,11 @@ int main() {
         }
         // write to buffer
 
-        for (u32 i = 0u; i < window_size.y; i++) {
-            for (u32 j = 0u; j < window_size.x; j++) {
-                window_buffer.get(i, j) = 0;
-            }
+        for (auto p = begin(&window_buffer); p < end(&window_buffer); p++) {
+            *p = 0xff223344;
         }
-        for (u32 i = 0u; i < window_size.y; i++) {
-            for (u32 j = 0u; j < window_size.x; j++) {
-                z_buffer.get(i, j) = INT_MAX;
-            }
+        for (auto p = begin(&z_buffer); p < end(&z_buffer); p++) {
+            *p = INT_MAX;
         }
 
         // Color c = {0xff5533ff};
@@ -209,11 +205,18 @@ int main() {
         //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
         //                 window_buffer, {0xffffffff}, window_size, {100, 100});
         // }
+        // if (is_ortho) {
+        //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
+        //                 window_buffer, z_buffer, window_size, {100, 100});
+        // } else {
+        //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
+        //                 window_buffer, z_buffer, window_size, {100, 100});
+        // }
         if (is_ortho) {
-            render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
+            render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, proc_buffer, 
                         window_buffer, z_buffer, window_size, {100, 100});
         } else {
-            render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
+            render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, proc_buffer, 
                         window_buffer, z_buffer, window_size, {100, 100});
         }
         

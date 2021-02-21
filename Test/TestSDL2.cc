@@ -8,7 +8,7 @@
 using namespace cp;
 
 void set_pixel(dbuff2u buffer, vec2i pixel_pos) {
-    buffer.get(pixel_pos.y, pixel_pos.x) = 0xff555555;
+    buffer.get(pixel_pos.y, pixel_pos.x) = 0x00000000;
 }
 
 void foo(dbuff2u buffer) {
@@ -21,7 +21,7 @@ void foo(dbuff2u buffer) {
 
 int main()
 {
-    vec2u window_size = {501, 500};
+    vec2u window_size = {500, 500};
     // Create a screen.
     SDL_Window* window = SDL_CreateWindow("Chip8", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_size.x, window_size.y, SDL_WINDOW_RESIZABLE);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, 0);

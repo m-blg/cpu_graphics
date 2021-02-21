@@ -15,31 +15,31 @@ template <typename T> int sgn(T val) {
 
 union Color {
     u32 value;
-    vec4<u8> v;
+    struct { u8 b, g, r, a; };
 
     void init_vf(vec4f _v) {
-        v = vec4<u8>((u32)round(255 * _v.b), (u32)round(255 * _v.g), 
-                    (u32)round(255 * _v.r), (u32)round(255 * _v.a));
+        b = (u8)round(255 * _v.b); 
+        g = (u8)round(255 * _v.g); 
+        r = (u8)round(255 * _v.r); 
+        a = (u8)round(255 * _v.a);
     }
 
     operator u32() {
         return value;
     }
     operator vec4<u8>() {
-        return v;
+        return {a, r, g, b};
     }
 };
 
 
 Color to_color(vec4f _v) {
     Color c; c.init_vf(_v);
-    c.v = vec4<u8>((u32)round(255 * _v.b), (u32)round(255 * _v.g), 
-                (u32)round(255 * _v.r), (u32)round(255 * _v.a));
     return c;
 }
 
 vec4f to_vf(Color color) {
-    return {(f32)color.v.a / 255.0f, (f32)color.v.r / 255.0f, (f32)color.v.g / 255.0f, (f32)color.v.b / 255.0f };
+    return {(f32)color.a / 255.0f, (f32)color.r / 255.0f, (f32)color.g / 255.0f, (f32)color.b / 255.0f };
 }
 
 template <typename T>
@@ -478,6 +478,8 @@ void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p
     i32 short_top_edge_hight = p1.y - p0.y;
     i32 short_bottom_edge_hight = p2.y - p1.y;
 
+    if (long_edge_hight == 0) return;
+
     dbuffi bound_buffer = {(i32*)proc_buffer.buffer, 2 * (u32)long_edge_hight};
     dbuff2f slope_itpl_buffer = {(f32*)(proc_buffer.buffer + 2 * (u32)long_edge_hight * sizeof(i32)), 2 * (u32)long_edge_hight, itpl_buffer.x_cap };
     assert(( "Not enough memory", proc_buffer.cap >= bound_buffer.cap * sizeof(i32) + total_cap(&slope_itpl_buffer) * sizeof(f32) ));
@@ -555,10 +557,27 @@ void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p
     }
 }
 
+void draw_triangle(dbuff2<u32> buffer, vec2f p0, vec2f p1, vec2f p2, dbuff2f itpl_buffer,
+                      void (*fragment_shader_lmd)(dbuff2u, vec2i, dbufff, void*, void (dbuff2u, vec2i, Color)), 
+                      void* frag_shader_args, dbuff<u8> proc_buffer, vec2i window_size, vec2i pixels_per_unit) { 
+
+    vec2i p0_screen = space_to_screen_coord(p0, window_size, pixels_per_unit);
+    vec2i p1_screen = space_to_screen_coord(p1, window_size, pixels_per_unit);
+    vec2i p2_screen = space_to_screen_coord(p2, window_size, pixels_per_unit);
+
+    if (!rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p1_screen) || 
+        !rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p2_screen)) {
+            rasterize_triangle_scanline(buffer, p0_screen, p1_screen, p2_screen, 
+                itpl_buffer, fragment_shader_lmd, frag_shader_args, proc_buffer, set_pixel_color);
+        } else {
+            rasterize_triangle_scanline(buffer, p0_screen, p1_screen, p2_screen, 
+                itpl_buffer, fragment_shader_lmd, frag_shader_args, proc_buffer, raw_set_pixel_color);
+        }
+}
+
 inline void color_itpl_frag_shader(dbuff2u out_buffer, vec2i p, dbufff itpl_buffer, 
                     void* args, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
-    Color c; c.init_vf({itpl_buffer[3], itpl_buffer[2], itpl_buffer[1], itpl_buffer[0]});
-    set_pixel_color_lmd(out_buffer, p, c);
+    set_pixel_color_lmd(out_buffer, p, to_color({itpl_buffer[0], itpl_buffer[1], itpl_buffer[2], itpl_buffer[3]}));
 }
 
 
