@@ -1,14 +1,15 @@
+
 #include <X11/Xlib.h>
 
 #include <X11/Xutil.h>
-#include "../../cp_lib/basic.cc"
-#include "../../cp_lib/array.cc"
-#include "../../cp_lib/vector.cc"
-#include "../../cp_lib/memory.cc"
+#include "../cp_lib/basic.cc"
+#include "../cp_lib/array.cc"
+#include "../cp_lib/vector.cc"
+#include "../cp_lib/memory.cc"
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "../draw.cc"
+#include "game.h"
 
 using namespace cp;
 
@@ -66,12 +67,18 @@ int main() {
     window_buffer.init(window_max_size.y, window_max_size.x);
     XImage* x_window_buffer = XCreateImage(display, visual_info.visual, visual_info.depth, ZPixmap, 0, (char*)window_buffer.buffer, window_max_size.x, window_max_size.y, sizeof(u32) * 8, 0);
 
+    game_init();
 
     bool is_running = true;
     while (is_running) 
     {
         // event loop
 
+        for (u32 i = 0; i < KEY_COUNT; i++) {
+            g_keys_down.buffer[i] = 0;
+            g_keys_up.buffer[i] = 0;
+        }
+        
         XEvent e;
         while (XPending(display) > 0) {
             XNextEvent(display, &e);
@@ -92,21 +99,14 @@ int main() {
                     if (key_event->keycode == XKeysymToKeycode(display, XK_q)) {
                         is_running = false;
                     }
+
                 } break;
             }
         }
 
         // write to buffer
 
-        for (u32 i = 0u; i < window_size.y; i++) {
-            for (u32 j = 0u; j < window_size.x; j++) {
-                if (((i/100u) + (j/100u)) % 2 > 0) {
-                    window_buffer.get(i, j) = 0xffffffff;
-                } else {
-                    window_buffer.get(i, j) = 0;
-                }
-            }
-        }
+        game_update();
 
         XPutImage(display, window, default_gc, x_window_buffer, 0, 0, 0, 0, window_size.x, window_size.y);
 
@@ -117,6 +117,7 @@ int main() {
     XFlush(display);
 
     window_buffer.shut();
+    game_shut();
 
     return 0;
 }

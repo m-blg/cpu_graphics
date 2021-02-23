@@ -217,7 +217,8 @@ void draw_line(dbuff2<u32> buffer, vec2f p1, vec2f p2, dbuff2f itpl_buffer,
         }
 }
 
-void rasterize_triangle_scanline_(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p2, Color color, 
+//slow
+void rasterize_triangle_scanline_parametric(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p2, Color color, 
                       void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
     // sort points by y coordinate p0 - top one, p1 - middle, p2 - bottom
     if (p0.y > p1.y) {swap(&p0, &p1);} else if (p0.y == p1.y && p0.x > p1.x) {swap(&p0, &p1);}
