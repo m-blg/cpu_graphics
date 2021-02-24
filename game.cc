@@ -1,7 +1,10 @@
 #pragma once
 
-#include "../cp_lib/bitfield.cc"
+#include "../cp_lib/basic.cc"
+#include "../cp_lib/array.cc"
 #include "../cp_lib/vector.cc"
+#include "../cp_lib/bitfield.cc"
+#include "../cp_lib/memory.cc"
 
 using namespace cp;
 
