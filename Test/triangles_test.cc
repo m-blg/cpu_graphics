@@ -79,7 +79,7 @@ void game_update() {
 
     // Color c = {0xff5533ff};
     vec2i pointer_local_pos = Input::mouse_pos;
-    rasterize_line(graphics_buffer, {5, 5}, pointer_local_pos/10 - vec2i(2, 2), 
+    rasterize_line(graphics_buffer, {25, 25}, pointer_local_pos/10 - vec2i(2, 2), 
     line_color_buffer, color_itpl_frag_shader, null, set_pixel_color);
 
     triangles[0][0] = pointer_local_pos/10;
@@ -87,8 +87,8 @@ void game_update() {
     triangles[2][0] = triangles[0][1];triangles[2][1] = triangles[0][2]; triangles[2][2] = {80, 35};
     triangles[3][0] = triangles[0][2];triangles[3][1] = triangles[0][0]; triangles[3][2] = {30, 90};
     
-    for (u32 i = 0; i < 1; i++)
-        rasterize_triangle_scanline(graphics_buffer, triangles[i][0], triangles[i][1], triangles[i][2], triangle_colors[i], proc_buffer, set_pixel_color);
+    // for (u32 i = 0; i < 1; i++)
+    //     rasterize_triangle_scanline(graphics_buffer, triangles[i][0], triangles[i][1], triangles[i][2], triangle_colors[i], proc_buffer, set_pixel_color);
 
     if (is_drawing_vertices)
         for (u32 i = 0; i < 3; i++) {

@@ -136,7 +136,9 @@ void rasterize_line_parametric(dbuff2<u32> buffer, vec2i p1, vec2i p2, Color col
     set_pixel_color_lmd(buffer, p2, color);
 }
 
-void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
+
+
+void rasterize_line_dda(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
                       void (*fragment_shader_lmd)(dbuff2u, vec2i, dbufff, void*, void (dbuff2u, vec2i, Color)), 
                       void* frag_shader_args, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
     if (p1 == p2) {
@@ -160,12 +162,12 @@ void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
         f32 k = (f32)delta_y / delta_x;
 
         for (i32 x1 = 0; x1 != delta_x; x1 += sgn(delta_x)) {
+            i32 y1 = round(k * x1);
+            fragment_shader_lmd(buffer, {p1.x + x1, p1.y + y1}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+
             for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
                 cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
             }
-
-            i32 y1 = round(k * x1);
-            fragment_shader_lmd(buffer, {p1.x + x1, p1.y + y1}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
         }
 
     } else {
@@ -176,12 +178,94 @@ void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
         f32 k = (f32)delta_x / delta_y;
 
         for (i32 y1 = 0; y1 != delta_y; y1 += sgn(delta_y)) {
+            i32 x1 = round(k * y1);
+            fragment_shader_lmd(buffer, {p1.x + x1, p1.y + y1}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+           
             for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
                 cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
             }
+        }
+    }
 
-            i32 x1 = round(k * y1);
-            fragment_shader_lmd(buffer, {p1.x + x1, p1.y + y1}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+    fragment_shader_lmd(buffer, p2, {itpl_buffer.buffer + itpl_buffer.x_cap, itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
+}
+
+
+void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
+                      void (*fragment_shader_lmd)(dbuff2u, vec2i, dbufff, void*, void (dbuff2u, vec2i, Color)), 
+                      void* frag_shader_args, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
+    if (p1 == p2) {
+        fragment_shader_lmd(buffer, p2, {itpl_buffer.buffer, itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
+        return;
+    }
+
+    
+    i32 adelta_x = abs(p2.x - p1.x);
+    i32 adelta_y = abs(p2.y - p1.y);
+
+    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
+    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
+
+    memcpy(cur_itpl_buffer.buffer, itpl_buffer.buffer, sizeof(f32) * cap(&cur_itpl_buffer));
+
+    if (adelta_x > adelta_y) {
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer.get(1, i) - itpl_buffer.get(0, i)) / adelta_x;
+        }
+
+        if (p1.x > p2.x) swap(&p1, &p2);
+
+        i32 delta_x = p2.x - p1.x;
+        i32 delta_y = p2.y - p1.y;
+        i32 sgn_delta_x = sgn(p2.x - p1.x);
+        i32 sgn_delta_y = sgn(p2.y - p1.y);
+
+        i32 e = 0;
+        i32 y = p1.y;
+
+        for (i32 x = p1.x; x < p2.x; x++) {
+            fragment_shader_lmd(buffer, {x, y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+
+            if (2 * (e + delta_y) * sgn_delta_y < adelta_x) {
+                e = e + delta_y;
+            } else {
+                e = e + delta_y - sgn_delta_y * adelta_x;
+                y += sgn_delta_y;
+            }
+
+            for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+            }
+        }
+
+    } else {
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer.get(1, i) - itpl_buffer.get(0, i)) / adelta_y;
+        }
+
+        if (p1.y > p2.y) swap(&p1, &p2);
+
+        i32 delta_y = p2.y - p1.y;
+        i32 delta_x = p2.x - p1.x;
+        i32 sgn_delta_y = sgn(p2.y - p1.y);
+        i32 sgn_delta_x = sgn(p2.x - p1.x);
+
+        i32 e = 0;
+        i32 x = p1.x;
+
+        for (i32 y = p1.y; y < p2.y; y++) {
+            fragment_shader_lmd(buffer, {x, y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+
+            if (2 * (e + delta_x) * sgn_delta_x < adelta_y) {
+                e = e + delta_x;
+            } else {
+                e = e + delta_x - sgn_delta_x * adelta_y;
+                x += sgn_delta_x;
+            }
+
+            for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
+                cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
+            }
         }
     }
 
