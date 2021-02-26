@@ -206,14 +206,24 @@ void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
     dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
     dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
 
-    memcpy(cur_itpl_buffer.buffer, itpl_buffer.buffer, sizeof(f32) * cap(&cur_itpl_buffer));
+
+    sbuff<f32*, 2> itpl_buffer_p = {&itpl_buffer.get(0, 0), &itpl_buffer.get(1, 0)};
 
     if (adelta_x > adelta_y) {
-        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
-            cur_itpl_deltas[i] = (itpl_buffer.get(1, i) - itpl_buffer.get(0, i)) / adelta_x;
+        
+        if (p1.x > p2.x) { 
+            swap(&p1, &p2);
+            swap(&itpl_buffer_p[0], &itpl_buffer_p[1]);
         }
 
-        if (p1.x > p2.x) swap(&p1, &p2);
+        // init interpolation vector
+        memcpy(cur_itpl_buffer.buffer, itpl_buffer_p[0], sizeof(f32) * cap(&cur_itpl_buffer));
+
+        // init delta vector
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer_p[1][i] - itpl_buffer_p[0][i]) / adelta_x;
+        }
+
 
         i32 delta_x = p2.x - p1.x;
         i32 delta_y = p2.y - p1.y;
@@ -239,11 +249,18 @@ void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
         }
 
     } else {
-        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
-            cur_itpl_deltas[i] = (itpl_buffer.get(1, i) - itpl_buffer.get(0, i)) / adelta_y;
+        if (p1.y > p2.y) { 
+            swap(&p1, &p2);
+            swap(&itpl_buffer_p[0], &itpl_buffer_p[1]);
         }
 
-        if (p1.y > p2.y) swap(&p1, &p2);
+        // init interpolation vector
+        memcpy(cur_itpl_buffer.buffer, itpl_buffer_p[0], sizeof(f32) * cap(&cur_itpl_buffer));
+
+        // init delta vector
+        for (u32 i = 0; i < cap(&cur_itpl_deltas); i++) {
+            cur_itpl_deltas[i] = (itpl_buffer_p[1][i] - itpl_buffer_p[0][i]) / adelta_y;
+        }
 
         i32 delta_y = p2.y - p1.y;
         i32 delta_x = p2.x - p1.x;
@@ -269,7 +286,7 @@ void rasterize_line(dbuff2<u32> buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
         }
     }
 
-    fragment_shader_lmd(buffer, p2, {itpl_buffer.buffer + itpl_buffer.x_cap, itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
+    fragment_shader_lmd(buffer, p2, {itpl_buffer_p[1], itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
 }
 
 
@@ -559,11 +576,11 @@ void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p
     // find on which side is the bend is
     bool is_right_bended = (cross(p2 - p0, p1 - p0) < 0);
 
-    i32 long_edge_hight = p2.y - p0.y;
-    i32 short_top_edge_hight = p1.y - p0.y;
-    i32 short_bottom_edge_hight = p2.y - p1.y;
+    i32 long_edge_hight = p2.y - p0.y + 1;
+    i32 short_top_edge_hight = p1.y - p0.y + 1;
+    i32 short_bottom_edge_hight = p2.y - p1.y + 1;
 
-    if (long_edge_hight == 0) return;
+    if (long_edge_hight == 1) return;
 
     dbuffi bound_buffer = {(i32*)proc_buffer.buffer, 2 * (u32)long_edge_hight};
     dbuff2f slope_itpl_buffer = {(f32*)(proc_buffer.buffer + 2 * (u32)long_edge_hight * sizeof(i32)), 2 * (u32)long_edge_hight, itpl_buffer.x_cap };
@@ -606,14 +623,14 @@ void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p
                 cur_itpl_deltas[i] = (slope_itpl_buffer.get(long_edge_hight + y, i) - slope_itpl_buffer.get(y, i)) / abs(delta_x);
             }
 
-            for (i32 x = bound_buffer[y]; x < bound_buffer[long_edge_hight + y]; x++) {
+            for (i32 x = bound_buffer[y]; x <= bound_buffer[long_edge_hight + y]; x++) {
+                //set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
+                fragment_shader_lmd(buffer, {x, p0.y + y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+
                 // update current interpolation vector
                 for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
                     cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
                 }
-
-                //set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
-                fragment_shader_lmd(buffer, {x, p0.y + y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
             }
         }
     }
@@ -629,14 +646,14 @@ void rasterize_triangle_scanline(dbuff2<u32> buffer, vec2i p0, vec2i p1, vec2i p
                 cur_itpl_deltas[i] = (slope_itpl_buffer.get(long_edge_hight + y, i) - slope_itpl_buffer.get(y, i)) / abs(delta_x);
             }
 
-            for (i32 x = bound_buffer[y]; x < bound_buffer[long_edge_hight + y]; x++) {
+            for (i32 x = bound_buffer[y]; x <= bound_buffer[long_edge_hight + y]; x++) {
+                //set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
+                fragment_shader_lmd(buffer, {x, p0.y + y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+
                 // update current interpolation vector
                 for (u32 i = 0; i < cap(&cur_itpl_buffer); i++) {
                     cur_itpl_buffer[i] += cur_itpl_deltas[i]; 
                 }
-
-                //set_pixel_color_lmd(buffer, {x, p0.y + y}, color);
-                fragment_shader_lmd(buffer, {x, p0.y + y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
             }
         }
     }
