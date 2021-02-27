@@ -104,12 +104,12 @@ void game_update() {
     triangles[3][0] = triangles[0][2];triangles[3][1] = triangles[0][0]; triangles[3][2] = {30, 90};
     
     for (u32 i = 0; i < 1; i++) {
-        rasterize_triangle_scanline(graphics_buffer, triangles[i][0], triangles[i][1], triangles[i][2], triangle_colors[i], proc_buffer, set_pixel_color);
+        // rasterize_triangle_scanline(graphics_buffer, triangles[i][0], triangles[i][1], triangles[i][2], triangle_colors[i], proc_buffer, set_pixel_color);
     }
  
-    // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-    //     rasterize_triangle_scanline(graphics_buffer, {50, 50}, {30, 50}, pointer_local_pos/10, 
-    //         triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
+    if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
+        rasterize_triangle_scanline(graphics_buffer, {50, 50}, {30, 50}, pointer_local_pos/10, 
+            triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
 
     //  rasterize_triangle_scanline(graphics_buffer, {5, 5}, {25, 15}, {10, 20}, 
     //          triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);

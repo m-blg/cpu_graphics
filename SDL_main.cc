@@ -67,7 +67,7 @@ int main()
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
 
-        SDL_Delay(1000/60);
+        SDL_Delay(1000/30);
     }
 
     game_shut();

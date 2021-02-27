@@ -59,6 +59,7 @@ dbuff2f triangle_color_buffer = {(f32*)triangle_color, 3, 4};
 
 dbuff2f z_buffer;
 
+static quat rot;
 
 
 void game_init() {
@@ -71,8 +72,10 @@ void game_init() {
     proc_buffer.init(80000);
     // create buffer
 
-    graphics_buffer.init(window_max_size.y, window_max_size.x);
-    z_buffer.init(window_max_size.y, window_max_size.x);
+    graphics_buffer.init(window_size.y/4, window_size.x/4);
+    z_buffer.init(window_size.y/4, window_size.x/4);
+
+    rot.init(normalized(vec3f{1, 1, 1}), M_PI/10);
 }
 
 void game_shut() {
@@ -95,18 +98,26 @@ void game_update() {
         is_ortho = !is_ortho;
     }
 
-    if (get_bit(Input::keys_down, 'w')) {
+    if (get_bit(Input::keys_hold, 'w')) {
         cube_position += vec3f(0, 0, 0.1);
     }
-    if (get_bit(Input::keys_down, 's')) {
+    if (get_bit(Input::keys_hold, 's')) {
         cube_position += vec3f(0, 0, -0.1);
     }
-    if (get_bit(Input::keys_down, 'a')) {
+    if (get_bit(Input::keys_hold, 'a')) {
         cube_position += vec3f(-0.1, 0, 0);
     }
-    if (get_bit(Input::keys_down, 'd')) {
+    if (get_bit(Input::keys_hold, 'd')) {
         cube_position += vec3f(0.1, 0, 0);
     }
+    if (get_bit(Input::keys_hold, 'e')) {
+        cube_rotation = rot * cube_rotation;
+    }    
+    if (get_bit(Input::keys_hold, 'r')) {
+        cube_rotation = inverse(rot) * cube_rotation;
+    }
+    
+
 
     // write to buffer
 
@@ -118,7 +129,8 @@ void game_update() {
     }
 
     // Color c = {0xff5533ff};
-    vec2i pointer_local_pos = Input::mouse_pos;
+
+
     // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
     //     rasterize_line(graphics_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), 
     //     line_color_buffer, color_itpl_frag_shader, null, set_pixel_color);
@@ -126,9 +138,9 @@ void game_update() {
     // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
     //     rasterize_triangle_scanline(graphics_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff00ff00}, proc_buffer, set_pixel_color);
 
-    if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-        rasterize_triangle_scanline(graphics_buffer, {500, 500}, {300, 200}, pointer_local_pos, 
-            triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
+    // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
+    //     rasterize_triangle_scanline(graphics_buffer, {500, 500}, {300, 200}, pointer_local_pos, 
+    //         triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
 
     // rasterize_triangle_scanline(graphics_buffer, {500, 500}, {300, 200}, {700, 600}, 
     //         triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
@@ -153,16 +165,20 @@ void game_update() {
     // }
     if (is_ortho) {
         render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, proc_buffer, 
-                    graphics_buffer, z_buffer, window_size, {100, 100});
+                    graphics_buffer, z_buffer, window_size/4, {25, 25});
     } else {
         render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, proc_buffer, 
-                    graphics_buffer, z_buffer, window_size, {100, 100});
+                    graphics_buffer, z_buffer, window_size/4, {100, 100});
+    }
+
+    vec2i pointer_local_pos = Input::mouse_pos/4;
+    if (0 < pointer_local_pos.x - 5 && pointer_local_pos.x - 5 < window_size.x/4 && 0 < pointer_local_pos.y - 5 && pointer_local_pos.y - 5 < window_size.y/4) {
+        graphics_buffer.get(pointer_local_pos.y-5, pointer_local_pos.x-5) = 0xffff0000;
+        printf("%i %i\n", pointer_local_pos.x-5, pointer_local_pos.y-5);
     }
     
 
-    static quat rot;
-    rot.init(normalized(vec3f{1, 1, 1}), M_PI/1000);
-    cube_rotation = rot * cube_rotation;
+
 
 }
 
