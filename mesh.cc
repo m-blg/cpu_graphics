@@ -1,10 +1,10 @@
 #pragma once
 
 
-#include "../cp_lib/basic.cc"
-#include "../cp_lib/buffer.cc"
-#include "../cp_lib/vector.cc"
-#include "../cp_lib/math.cc"
+#include "cp_lib/basic.cc"
+#include "cp_lib/buffer.cc"
+#include "cp_lib/vector.cc"
+#include "cp_lib/math.cc"
 #include <math.h>
 
 

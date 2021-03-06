@@ -2,10 +2,10 @@
 #include <X11/Xlib.h>
 
 #include <X11/Xutil.h>
-#include "../cp_lib/basic.cc"
-#include "../cp_lib/array.cc"
-#include "../cp_lib/vector.cc"
-#include "../cp_lib/memory.cc"
+#include "cp_lib/basic.cc"
+#include "cp_lib/array.cc"
+#include "cp_lib/vector.cc"
+#include "cp_lib/memory.cc"
 #include <stdlib.h>
 #include <unistd.h>
 

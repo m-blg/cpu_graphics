@@ -1,9 +1,9 @@
 #include "../SDL_main.cc"
 
-#include "../../cp_lib/basic.cc"
-#include "../../cp_lib/array.cc"
-#include "../../cp_lib/vector.cc"
-#include "../../cp_lib/memory.cc"
+#include "cp_lib/basic.cc"
+#include "cp_lib/array.cc"
+#include "cp_lib/vector.cc"
+#include "cp_lib/memory.cc"
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -22,9 +22,9 @@ sbuff<vec3f, 8> cube_vertices = {{
 	{ 1, -1, 1 },
 	{ -1, -1, 1 }
 }};
-sbuff<u32[3], 12> cube_triangles = {{
-    {0, 2, 1}, //face front
-    {0, 3, 2},
+sbuff<u32[3], 10> cube_triangles = {{
+    //{0, 2, 1}, //face front
+    //{0, 3, 2},
     {2, 3, 4}, //face top
     {2, 4, 5},
     {1, 2, 5}, //face right
@@ -72,7 +72,7 @@ void game_init() {
     proc_buffer.init(80000);
     // create buffer
 
-    graphics_buffer.init(window_size.y/4, window_size.x/4);
+    frame_buffer.init(window_size.y/4, window_size.x/4);
     z_buffer.init(window_size.y/4, window_size.x/4);
 
     rot.init(normalized(vec3f{1, 1, 1}), M_PI/10);
@@ -82,7 +82,7 @@ void game_shut() {
     input_shut();
     proj_buffer.shut();
     proc_buffer.shut();
-    graphics_buffer.shut();
+    frame_buffer.shut();
     z_buffer.shut();
 }
 
@@ -121,7 +121,7 @@ void game_update() {
 
     // write to buffer
 
-    for (auto p = begin(&graphics_buffer); p < end(&graphics_buffer); p++) {
+    for (auto p = begin(&frame_buffer); p < end(&frame_buffer); p++) {
         *p = 0xff223344;
     }
     for (auto p = begin(&z_buffer); p < end(&z_buffer); p++) {
@@ -132,48 +132,64 @@ void game_update() {
 
 
     // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-    //     rasterize_line(graphics_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), 
+    //     rasterize_line(frame_buffer, {500, 500}, pointer_local_pos - vec2i(100, 100), 
     //     line_color_buffer, color_itpl_frag_shader, null, set_pixel_color);
     
     // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-    //     rasterize_triangle_scanline(graphics_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff00ff00}, proc_buffer, set_pixel_color);
+    //     rasterize_triangle_scanline(frame_buffer, {500, 500}, {300, 200}, pointer_local_pos, {0xff00ff00}, proc_buffer, set_pixel_color);
 
     // if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-    //     rasterize_triangle_scanline(graphics_buffer, {500, 500}, {300, 200}, pointer_local_pos, 
+    //     rasterize_triangle_scanline(frame_buffer, {500, 500}, {300, 200}, pointer_local_pos, 
     //         triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
 
-    // rasterize_triangle_scanline(graphics_buffer, {500, 500}, {300, 200}, {700, 600}, 
+    // rasterize_triangle_scanline(frame_buffer, {500, 500}, {300, 200}, {700, 600}, 
     //         triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
 
     // for (i32 i = 1; i < 200; i++) {
-    //     rasterize_line(graphics_buffer, {1800, 100 + i}, {300, 900 + i}, {0xffff55ff + i}, set_pixel_color);
+    //     rasterize_line(frame_buffer, {1800, 100 + i}, {300, 900 + i}, {0xffff55ff + i}, set_pixel_color);
     // }
 
     // if (is_ortho) {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
-    //                 graphics_buffer, {0xffffffff}, window_size, {100, 100});
+    //                 frame_buffer, {0xffffffff}, window_size, {100, 100});
     // } else {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
-    //                 graphics_buffer, {0xffffffff}, window_size, {100, 100});
+    //                 frame_buffer, {0xffffffff}, window_size, {100, 100});
     // }
     // if (is_ortho) {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
-    //                 graphics_buffer, z_buffer, window_size, {100, 100});
+    //                 frame_buffer, z_buffer, window_size, {100, 100});
     // } else {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
-    //                 graphics_buffer, z_buffer, window_size, {100, 100});
+    //                 frame_buffer, z_buffer, window_size, {100, 100});
     // }
+    // if (is_ortho) {
+    //     render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, proc_buffer, 
+    //                 &frame_buffer, z_buffer, window_size/4, {25, 25});
+    // } else {
+    //     render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, proc_buffer, 
+    //                 &frame_buffer, z_buffer, window_size/4, {100, 100});
+    // }
+
+
+    Render_Object robj = {&cube_mesh, &cube_position, &cube_rotation};
+    Vertex_Buffer vb = {{(u8*)robj.mesh->vertices.buffer, robj.mesh->vertices.cap * (u32)sizeof(vec3i)}, sizeof(vec3i)};
+
+    sbuff<u8, sizeof(robj) + sizeof(vec2f(*)(vec3f))> vsh_args;
+    *(Render_Object**)vsh_args.buffer = &robj;
     if (is_ortho) {
-        render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, proc_buffer, 
-                    graphics_buffer, z_buffer, window_size/4, {25, 25});
-    } else {
-        render_mesh({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, proc_buffer, 
-                    graphics_buffer, z_buffer, window_size/4, {100, 100});
-    }
+        *(vec2f(**)(vec3f))(vsh_args.buffer + sizeof(Render_Object*)) = project_xy_orthogonal;
+    } else 
+        *(vec2f(**)(vec3f))(vsh_args.buffer + sizeof(Render_Object*)) = project_xy_perspective;
+
+
+    Shader_Pack shaders = {test_vertex_shader, vsh_args.buffer, wireframe_frag_shader, &z_buffer, 1};
+    draw_triangles(&frame_buffer, &vb, &robj.mesh->triangles, &shaders, &proc_buffer);
+
 
     vec2i pointer_local_pos = Input::mouse_pos/4;
     if (0 < pointer_local_pos.x - 5 && pointer_local_pos.x - 5 < window_size.x/4 && 0 < pointer_local_pos.y - 5 && pointer_local_pos.y - 5 < window_size.y/4) {
-        graphics_buffer.get(pointer_local_pos.y-5, pointer_local_pos.x-5) = 0xffff0000;
+        frame_buffer.get(pointer_local_pos.y-5, pointer_local_pos.x-5) = 0xffff0000;
         printf("%i %i\n", pointer_local_pos.x-5, pointer_local_pos.y-5);
     }
     

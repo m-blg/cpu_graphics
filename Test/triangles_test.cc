@@ -46,7 +46,7 @@ void game_init() {
 
     // create buffer
 
-    graphics_buffer.init(100, 100);
+    frame_buffer.init(100, 100);
     z_buffer.init(100, 100);
 
     proc_buffer.init(80000);
@@ -59,7 +59,7 @@ void game_init() {
 void game_shut() {
     input_shut();
 
-    graphics_buffer.shut();
+    frame_buffer.shut();
     z_buffer.shut();
 }
 
@@ -86,7 +86,7 @@ void game_update() {
 
     // write to buffer
 
-    for (auto p = begin(&graphics_buffer); p < end(&graphics_buffer); p++) {
+    for (auto p = begin(&frame_buffer); p < end(&frame_buffer); p++) {
         *p = 0xff223344;
     }
     for (auto p = begin(&z_buffer); p < end(&z_buffer); p++) {
@@ -95,7 +95,7 @@ void game_update() {
 
     // Color c = {0xff5533ff};
     vec2i pointer_local_pos = Input::mouse_pos;
-    rasterize_line(graphics_buffer, {25, 25}, pointer_local_pos/10 - vec2i(2, 2), 
+    rasterize_line(&frame_buffer, {25, 25}, pointer_local_pos/10 - vec2i(2, 2), 
     line_color_buffer, color_itpl_frag_shader, null, set_pixel_color);
 
     triangles[0][tr_vertex_index] = pointer_local_pos/10;
@@ -104,50 +104,49 @@ void game_update() {
     triangles[3][0] = triangles[0][2];triangles[3][1] = triangles[0][0]; triangles[3][2] = {30, 90};
     
     for (u32 i = 0; i < 1; i++) {
-        // rasterize_triangle_scanline(graphics_buffer, triangles[i][0], triangles[i][1], triangles[i][2], triangle_colors[i], proc_buffer, set_pixel_color);
+        // rasterize_triangle_scanline(frame_buffer, triangles[i][0], triangles[i][1], triangles[i][2], triangle_colors[i], proc_buffer, set_pixel_color);
     }
  
     if (pointer_local_pos.x < window_size.x && pointer_local_pos.y < window_size.y)
-        rasterize_triangle_scanline(graphics_buffer, {50, 50}, {30, 50}, pointer_local_pos/10, 
+        rasterize_triangle_scanline(&frame_buffer, {50, 50}, {30, 50}, pointer_local_pos/10, 
             triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
 
-    //  rasterize_triangle_scanline(graphics_buffer, {5, 5}, {25, 15}, {10, 20}, 
+    //  rasterize_triangle_scanline(frame_buffer, {5, 5}, {25, 15}, {10, 20}, 
     //          triangle_color_buffer, color_itpl_frag_shader, null, proc_buffer, set_pixel_color);
 
     // for (i32 i = 1; i < 200; i++) {
-    //     rasterize_line(graphics_buffer, {1800, 100 + i}, {300, 900 + i}, {0xffff55ff + i}, set_pixel_color);
+    //     rasterize_line(frame_buffer, {1800, 100 + i}, {300, 900 + i}, {0xffff55ff + i}, set_pixel_color);
     // }
 
     // if (is_ortho) {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
-    //                 graphics_buffer, {0xffffffff}, window_size, {100, 100});
+    //                 frame_buffer, {0xffffffff}, window_size, {100, 100});
     // } else {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
-    //                 graphics_buffer, {0xffffffff}, window_size, {100, 100});
+    //                 frame_buffer, {0xffffffff}, window_size, {100, 100});
     // }
     // if (is_ortho) {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_orthogonal, _proj_buffer, 
-    //                 graphics_buffer, z_buffer, window_size, {100, 100});
+    //                 frame_buffer, z_buffer, window_size, {100, 100});
     // } else {
     //     render_wireframe({&cube_mesh, &cube_position, &cube_rotation}, project_xy_perspective, _proj_buffer, 
-    //                 graphics_buffer, z_buffer, window_size, {100, 100});
+    //                 frame_buffer, z_buffer, window_size, {100, 100});
     // }
   
     if (is_drawing_vertices) {
         for (u32 i = 0; i < 3; i++) {
             vec2i& v = triangles[0][i];
-            graphics_buffer.get(v.y, v.x) = 0xffff0000;
+            frame_buffer.get(v.y, v.x) = 0xffff0000;
         }
 
-        graphics_buffer.get(5, 5) = 0xffff0000;
-        graphics_buffer.get(15, 25) = 0xffff0000;
-        graphics_buffer.get(20, 10) = 0xffff0000;
+        frame_buffer.get(5, 5) = 0xffff0000;
+        frame_buffer.get(15, 25) = 0xffff0000;
+        frame_buffer.get(20, 10) = 0xffff0000;
 
 
-        graphics_buffer.get(50, 50) = 0xffff0000;
-        graphics_buffer.get(50, 30) = 0xffff0000;
-        graphics_buffer.get(pointer_local_pos.y/10, pointer_local_pos.x/10) = 0xffff0000;
+        frame_buffer.get(50, 50) = 0xffff0000;
+        frame_buffer.get(50, 30) = 0xffff0000;
+        frame_buffer.get(pointer_local_pos.y/10, pointer_local_pos.x/10) = 0xffff0000;
     }
-
 }
 

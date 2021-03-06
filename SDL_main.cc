@@ -2,8 +2,8 @@
 
 #include <SDL2/SDL.h> 
 #include <SDL2/SDL_timer.h> 
-#include "../cp_lib/basic.cc"
-#include "../cp_lib/vector.cc"
+#include "cp_lib/basic.cc"
+#include "cp_lib/vector.cc"
 
 #include "game.cc"
 
@@ -15,7 +15,7 @@ int main()
 
     SDL_Window* window = SDL_CreateWindow("Chip8", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_size.x, window_size.y, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, 0);
-    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, graphics_buffer.x_cap, graphics_buffer.y_cap);
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, frame_buffer.x_cap, frame_buffer.y_cap);
 
 
     while (is_running) {
@@ -62,7 +62,7 @@ int main()
 
         game_update();
 
-        SDL_UpdateTexture(texture, nullptr, graphics_buffer.buffer, graphics_buffer.x_cap * sizeof(u32));
+        SDL_UpdateTexture(texture, nullptr, frame_buffer.buffer, frame_buffer.x_cap * sizeof(u32));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);

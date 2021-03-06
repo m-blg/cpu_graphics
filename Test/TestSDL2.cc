@@ -2,8 +2,8 @@
 
 #include <SDL2/SDL.h> 
 #include <SDL2/SDL_timer.h> 
-#include "../../cp_lib/basic.cc"
-#include "../../cp_lib/vector.cc"
+#include "../cp_lib/basic.cc"
+#include "../cp_lib/vector.cc"
 
 using namespace cp;
 

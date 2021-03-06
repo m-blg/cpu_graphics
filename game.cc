@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../cp_lib/basic.cc"
-#include "../cp_lib/array.cc"
-#include "../cp_lib/vector.cc"
-#include "../cp_lib/bitfield.cc"
-#include "../cp_lib/memory.cc"
+#include "cp_lib/basic.cc"
+#include "cp_lib/array.cc"
+#include "cp_lib/vector.cc"
+#include "cp_lib/bitfield.cc"
+#include "cp_lib/memory.cc"
 
 using namespace cp;
 
@@ -13,7 +13,7 @@ bool is_running = true;
 vec2i window_max_size;
 vec2i window_size;
 
-dbuff2u graphics_buffer;
+dbuff2u frame_buffer;
 
 // input
 #define KEY_COUNT 500

@@ -1,6 +1,6 @@
 #include "../draw.cc"
 #include "../mesh.cc"
-#include "../../cp_lib/quaternion.cc"
+#include "cp_lib/quaternion.cc"
 
 using namespace cp;
 
@@ -10,13 +10,13 @@ struct Render_Object {
     quat *rotation;
 };
 
-void wireframe_frag_shader(dbuff2u out_buffer, vec2i p, dbufff itpl_buffer, 
-                    void* args, void (*set_pixel_color_lmd)(dbuff2u, vec2i, Color)) {
-    
-    float z = itpl_buffer[0];
-    dbuff2f *z_buffer = (dbuff2f*)args;
+void wireframe_frag_shader(void* args) {
+    Fragment_Shader_Handle* handle = (Fragment_Shader_Handle*)args;
+
+    float z = handle->itpl_vector[0];
+    dbuff2f *z_buffer = (dbuff2f*)handle->args;
     f32* prev_z;
-    if (!z_buffer->sget(&prev_z, p.y, p.x) || z > *prev_z)
+    if (!z_buffer->sget(&prev_z, handle->point.y, handle->point.x) || z > *prev_z)
         return;
     
 
@@ -25,13 +25,26 @@ void wireframe_frag_shader(dbuff2u out_buffer, vec2i p, dbufff itpl_buffer,
         color = to_color(vec4f(1, 1, 1, 1) / z);
     } else 
         color = {0xffffffff};
-    set_pixel_color_lmd(out_buffer, p, color);
+    handle->set_pixel_color_lmd(handle->out_frame_buffer, handle->point, color);
     *prev_z = z;
+}
+
+void test_vertex_shader(void* args) {
+    Vertex_Shader_Handle* handle = (Vertex_Shader_Handle*)args;
+
+    Render_Object* obj = *(Render_Object**)handle->args;
+    vec2f(*project_lmd)(vec3f) = *(vec2f(**)(vec3f))((u8*)handle->args + sizeof(Render_Object*));
+
+    vec3f p = *obj->rotation * *(vec3f*)handle->vertex + *obj->position;
+    vec2f pr = project_lmd(p);
+
+    handle->out_vertex_itpl_vector[0] = p.z;
+    *handle->out_vertex_position = space_to_screen_coord(pr, window_size/4, {25, 25});
 }
 
 // cap(_proj_vertex_buffer) >= cap(obj.mesh->vertices)
 void render_wireframe_(Render_Object obj, vec2f(*project_lmd)(vec3f), dbuff<vec2f> _proj_vertex_buffer, 
-                        dbuff2u buffer, Color color, vec2i window_size, vec2i pixels_per_unit) {
+                        dbuff2u *buffer, Color color, vec2i window_size, vec2i pixels_per_unit) {
     for (u32 i = 0; i < cap(&obj.mesh->vertices); i++) {
         _proj_vertex_buffer[i] = project_lmd(*obj.rotation * obj.mesh->vertices[i] + *obj.position);
     }
@@ -51,7 +64,7 @@ void render_wireframe_(Render_Object obj, vec2f(*project_lmd)(vec3f), dbuff<vec2
 
 // cap(_proj_vertex_buffer) >= cap(obj.mesh->vertices)
 void render_wireframe(Render_Object obj, vec2f(*project_lmd)(vec3f), dbuff<vec3f> _proj_vertex_buffer, 
-                    dbuff2u buffer, dbuff2f z_buffer,
+                    dbuff2u *buffer, dbuff2f z_buffer,
                     vec2i window_size, vec2i pixels_per_unit) {
     for (u32 i = 0; i < cap(&obj.mesh->vertices); i++) {
         vec3f p = *obj.rotation * obj.mesh->vertices[i] + *obj.position;
@@ -85,7 +98,7 @@ void render_wireframe(Render_Object obj, vec2f(*project_lmd)(vec3f), dbuff<vec3f
 
 // cap(_proj_vertex_buffer) >= cap(obj.mesh->vertices)
 void render_mesh(Render_Object obj, vec2f(*project_lmd)(vec3f), dbuff<u8> proc_buffer, 
-                    dbuff2u buffer, dbuff2f z_buffer,
+                    dbuff2u *buffer, dbuff2f z_buffer,
                     vec2i window_size, vec2i pixels_per_unit) {
     
     dbuff<vec3f> proj_vertex_buffer = {(vec3f*)proc_buffer.buffer, cap(&obj.mesh->vertices)};
@@ -106,7 +119,8 @@ void render_mesh(Render_Object obj, vec2f(*project_lmd)(vec3f), dbuff<u8> proc_b
         float raw_itpl_buffer[3] = {p0.z, p1.z, p2.z};
         dbuff2f itpl_buffer = {raw_itpl_buffer, 3, 1};
         draw_triangle(buffer, {p0.x, p0.y}, {p1.x, p1.y}, {p2.x, p2.y}, 
-                  itpl_buffer, wireframe_frag_shader, &z_buffer, tr_proc_buffer, window_size, pixels_per_unit);
+                  itpl_buffer, wireframe_frag_shader, &z_buffer, &tr_proc_buffer, window_size, pixels_per_unit);
     }
 }
+
 
