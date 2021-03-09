@@ -175,15 +175,15 @@ void game_update() {
     Render_Object robj = {&cube_mesh, &cube_position, &cube_rotation};
     Vertex_Buffer vb = {{(u8*)robj.mesh->vertices.buffer, robj.mesh->vertices.cap * (u32)sizeof(vec3i)}, sizeof(vec3i)};
 
-    sbuff<u8, sizeof(robj) + sizeof(vec2f(*)(vec3f))> vsh_args;
-    *(Render_Object**)vsh_args.buffer = &robj;
+    Tupple<Render_Object*, vec2f(*)(vec3f)> vsh_args;
+    vsh_args.get<0>() = &robj;
     if (is_ortho) {
-        *(vec2f(**)(vec3f))(vsh_args.buffer + sizeof(Render_Object*)) = project_xy_orthogonal;
+        vsh_args.get<1>() = project_xy_orthogonal;
     } else 
-        *(vec2f(**)(vec3f))(vsh_args.buffer + sizeof(Render_Object*)) = project_xy_perspective;
+        vsh_args.get<1>() = project_xy_perspective;
 
 
-    Shader_Pack shaders = {test_vertex_shader, vsh_args.buffer, wireframe_frag_shader, &z_buffer, 1};
+    Shader_Pack shaders = {test_vertex_shader, &vsh_args, wireframe_frag_shader, &z_buffer, 1};
     draw_triangles(&frame_buffer, &vb, &robj.mesh->triangles, &shaders, &proc_buffer);
 
 

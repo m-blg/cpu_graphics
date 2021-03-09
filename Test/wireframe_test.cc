@@ -32,8 +32,9 @@ void wireframe_frag_shader(void* args) {
 void test_vertex_shader(void* args) {
     Vertex_Shader_Handle* handle = (Vertex_Shader_Handle*)args;
 
-    Render_Object* obj = *(Render_Object**)handle->args;
-    vec2f(*project_lmd)(vec3f) = *(vec2f(**)(vec3f))((u8*)handle->args + sizeof(Render_Object*));
+    auto t_args = (Tupple<Render_Object*, vec2f(*)(vec3f)>*)handle->args;
+    Render_Object* obj = t_args->get<0>();
+    vec2f(*project_lmd)(vec3f) = t_args->get<1>();
 
     vec3f p = *obj->rotation * *(vec3f*)handle->vertex + *obj->position;
     vec2f pr = project_lmd(p);
