@@ -9,9 +9,8 @@
 
 
 struct Mesh {
-    cp::dbuff<cp::vec3f> vertices;
-    cp::dbuff<u32[3]> triangles;
-
+    cp::dbuff<u8> vertex_buffer;
+    cp::dbuff<u32[3]> index_buffer;
 };
 
 // cap(&vertices) <= cap(&out_points)

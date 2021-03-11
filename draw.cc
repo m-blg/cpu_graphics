@@ -452,7 +452,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
         fsh_handle.point = p1;
         fsh_handle.itpl_vector = itpl_buffer_from;
 
-        fragment_shader_lmd(&fsh_handle);
+        // fragment_shader_lmd(&fsh_handle);
         //set_pixel_color_lmd(out_frame_buffer, p1, {0xff0000ff});
         return;
     }
@@ -499,7 +499,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
             }
 
             fsh_handle.point = {x, y};
-            fragment_shader_lmd(&fsh_handle);
+            // fragment_shader_lmd(&fsh_handle);
             //set_pixel_color_lmd(out_frame_buffer, {x, y}, {0xff0000ff});
 
 
@@ -538,7 +538,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
             }
 
             fsh_handle.point = {x, y};
-            fragment_shader_lmd(&fsh_handle);
+            // fragment_shader_lmd(&fsh_handle);
             //set_pixel_color_lmd(out_frame_buffer, {x, y}, {0xff0000ff});
 
 
@@ -563,7 +563,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
     }
 
     fsh_handle.point = p2;
-    fragment_shader_lmd(&fsh_handle);
+    // fragment_shader_lmd(&fsh_handle);
     //set_pixel_color_lmd(out_frame_buffer, p2, {0xff0000ff});
 
 }
