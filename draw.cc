@@ -198,24 +198,43 @@ void rasterize_line_dda(dbuff2<u32> *frame_buffer, vec2i p1, vec2i p2, dbuff2f i
     // fragment_shader_lmd(frame_buffer, p2, {itpl_buffer.buffer + itpl_buffer.x_cap, itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
 }
 
+void rasterize_line(dbuff2<u32> *out_frame_buffer, vec2i p0, vec2i p1,
+                    f32** itpl_buffer, u32 itpl_vector_len,
+                    void (*fragment_shader_lmd)(void*), 
+                    void* frag_shader_args,
+                    void (*set_pixel_color_lmd)(dbuff2u*, vec2i, Color)) {
 
-void rasterize_line(dbuff2<u32> *buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer,
-                      void (*fragment_shader_lmd)(void*), 
-                      void* frag_shader_args, void (*set_pixel_color_lmd)(dbuff2u*, vec2i, Color)) {
-    if (p1 == p2) {
-        // fragment_shader_lmd(buffer, p2, {itpl_buffer.buffer, itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
+    Fragment_Shader_Handle fsh_handle = {};
+    fsh_handle.out_frame_buffer = out_frame_buffer;
+    fsh_handle.set_pixel_color_lmd = set_pixel_color_lmd;
+    fsh_handle.args = frag_shader_args;
+
+
+    sbuff<f32*, 2> itpl_buffer_p = {itpl_buffer[0], itpl_buffer[1]};
+
+    if (p0 == p1) {
+        fsh_handle.point = p0;
+        fsh_handle.itpl_vector = {itpl_buffer_p[0], itpl_vector_len};
+
+        fragment_shader_lmd(&fsh_handle);
+        //set_pixel_color_lmd(out_frame_buffer, p0, {0xff0000ff});
         return;
     }
 
     
-    i32 adelta_x = abs(p2.x - p1.x);
-    i32 adelta_y = abs(p2.y - p1.y);
+    i32 adelta_x = abs(p1.x - p0.x);
+    i32 adelta_y = abs(p1.y - p0.y);
 
-    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
-    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer.x_cap), itpl_buffer.x_cap};
+    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_vector_len), itpl_vector_len};
+    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_vector_len), itpl_vector_len};
 
+    fsh_handle.itpl_vector = cur_itpl_buffer;
 
-    sbuff<f32*, 2> itpl_buffer_p = {&itpl_buffer.get(0, 0), &itpl_buffer.get(1, 0)};
+    i32 delta_x = p1.x - p0.x;
+    i32 delta_y = p1.y - p0.y;
+    i32 sgn_delta_x = sgn(p1.x - p0.x);
+    i32 sgn_delta_y = sgn(p1.y - p0.y);
+
 
     if (adelta_x > adelta_y) {
 
@@ -227,17 +246,14 @@ void rasterize_line(dbuff2<u32> *buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer
             cur_itpl_deltas[i] = (itpl_buffer_p[1][i] - itpl_buffer_p[0][i]) / adelta_x;
         }
 
-
-        i32 delta_x = p2.x - p1.x;
-        i32 delta_y = p2.y - p1.y;
-        i32 sgn_delta_x = sgn(p2.x - p1.x);
-        i32 sgn_delta_y = sgn(p2.y - p1.y);
-
         i32 e = 0;
-        i32 y = p1.y;
+        i32 y = p0.y;
 
-        for (i32 x = p1.x; x != p2.x; x+=sgn_delta_x) {
-            // fragment_shader_lmd(buffer, {x, y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+        for (i32 x = p0.x; x != p1.x; x+=sgn_delta_x) {
+            fsh_handle.point = {x, y};
+            fragment_shader_lmd(&fsh_handle);
+            //set_pixel_color_lmd(out_frame_buffer, {x, y}, {0xff0000ff});
+
 
             if (2 * (e + delta_y) * sgn_delta_y < adelta_x) {
                 e = e + delta_y;
@@ -252,10 +268,6 @@ void rasterize_line(dbuff2<u32> *buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer
         }
 
     } else {
-        //if (p1.y > p2.y) { 
-            //swap(&p1, &p2);
-            //swap(&itpl_buffer_p[0], &itpl_buffer_p[1]);
-        //}
 
         // init interpolation vector
         memcpy(cur_itpl_buffer.buffer, itpl_buffer_p[0], sizeof(f32) * cap(&cur_itpl_buffer));
@@ -265,16 +277,15 @@ void rasterize_line(dbuff2<u32> *buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer
             cur_itpl_deltas[i] = (itpl_buffer_p[1][i] - itpl_buffer_p[0][i]) / adelta_y;
         }
 
-        i32 delta_y = p2.y - p1.y;
-        i32 delta_x = p2.x - p1.x;
-        i32 sgn_delta_y = sgn(p2.y - p1.y);
-        i32 sgn_delta_x = sgn(p2.x - p1.x);
-
         i32 e = 0;
-        i32 x = p1.x;
+        i32 x = p0.x;
 
-        for (i32 y = p1.y; y != p2.y; y += sgn_delta_y) {
-            // fragment_shader_lmd(buffer, {x, y}, cur_itpl_buffer, frag_shader_args, set_pixel_color_lmd);
+        for (i32 y = p0.y; y != p1.y; y+=sgn_delta_y) {
+
+            fsh_handle.point = {x, y};
+            fragment_shader_lmd(&fsh_handle);
+            //set_pixel_color_lmd(out_frame_buffer, {x, y}, {0xff0000ff});
+
 
             if (2 * (e + delta_x) * sgn_delta_x < adelta_y) {
                 e = e + delta_x;
@@ -289,7 +300,10 @@ void rasterize_line(dbuff2<u32> *buffer, vec2i p1, vec2i p2, dbuff2f itpl_buffer
         }
     }
 
-    // fragment_shader_lmd(buffer, p2, {itpl_buffer_p[1], itpl_buffer.x_cap}, frag_shader_args, set_pixel_color_lmd);
+    fsh_handle.point = p1;
+    fragment_shader_lmd(&fsh_handle);
+    //set_pixel_color_lmd(out_frame_buffer, p1, {0xff0000ff});
+
 }
 
 
@@ -305,20 +319,41 @@ void draw_line(dbuff2<u32> *buffer, vec2f p1, vec2f p2, Color color, vec2i windo
         }
 }
 
-void draw_line(dbuff2<u32> *buffer, vec2f p1, vec2f p2, dbuff2f itpl_buffer,
-                    void (*fragment_shader_lmd)(void*), 
-                    void* frag_shader_args, vec2i window_size, vec2i pixels_per_unit) { 
-    vec2i p1_screen = space_to_screen_coord(p1, window_size, pixels_per_unit);
-    vec2i p2_screen = space_to_screen_coord(p2, window_size, pixels_per_unit);
+void draw_lines(dbuff2u *out_frame_buffer, Vertex_Buffer *vb, dbuff<u32[2]> *ib, 
+        Shader_Pack *shaders, dbuff<u8> *pr_buffer) {
 
-    if (!rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p1_screen) || 
-        !rect_is_contained<i32, i32>({ {0, 0}, window_size - vec2i::one() }, p2_screen)) {
-            rasterize_line(buffer, p1_screen, p2_screen, 
-                itpl_buffer, fragment_shader_lmd, frag_shader_args, set_pixel_color);
-        } else {
-            rasterize_line(buffer, p1_screen, p2_screen, 
-                itpl_buffer, fragment_shader_lmd, frag_shader_args, raw_set_pixel_color);
-        }
+    Vertex_Buffer pr_vertices = {{pr_buffer->buffer, 0}, (u32)(sizeof(vec2i) + sizeof(f32) * shaders->itpl_vector_len)};
+    pr_vertices.buffer.cap = cap(&vb->buffer) / vb->stride * pr_vertices.stride;
+
+    Vertex_Shader_Handle vsh_handle = {};
+    vsh_handle.args = shaders->vertex_shader_args;
+    vsh_handle.out_vertex_itpl_vector.cap = shaders->itpl_vector_len;
+
+         
+    auto pr_vertex_p = begin(&pr_vertices.buffer);
+    vsh_handle.vertex = begin(&vb->buffer);
+    for (; vsh_handle.vertex <= end(&vb->buffer) - vb->stride; vsh_handle.vertex += vb->stride, pr_vertex_p += pr_vertices.stride) {
+        vsh_handle.out_vertex_position = (vec2i*)pr_vertex_p;
+        vsh_handle.out_vertex_itpl_vector.buffer = (f32*)(pr_vertex_p + sizeof(vec2i));
+        shaders->vertex_shader(&vsh_handle);
+    }
+
+    for (auto ib_p = begin(ib); ib_p != end(ib); ib_p++) {
+        auto pr_vertex_p0_p = &pr_vertices.buffer[pr_vertices.stride * (*ib_p)[0]];
+        auto pr_vertex_p1_p = &pr_vertices.buffer[pr_vertices.stride * (*ib_p)[1]];
+
+        vec2i *p0 = (vec2i*)pr_vertex_p0_p;
+        vec2i *p1 = (vec2i*)pr_vertex_p1_p;
+
+        f32* p0_itpl_vec = (f32*)(pr_vertex_p0_p + sizeof(vec2i));
+        f32* p1_itpl_vec = (f32*)(pr_vertex_p1_p + sizeof(vec2i));
+
+        sbuff<f32*, 2> itpl_buffer = {p0_itpl_vec, p1_itpl_vec};
+
+        rasterize_line(out_frame_buffer, *p0, *p1, (f32**)&itpl_buffer.buffer, shaders->itpl_vector_len,
+                shaders->fragment_shader, shaders->fragment_shader_args, set_pixel_color);
+        
+    }
 }
 
 
@@ -452,7 +487,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
         fsh_handle.point = p1;
         fsh_handle.itpl_vector = itpl_buffer_from;
 
-        // fragment_shader_lmd(&fsh_handle);
+        fragment_shader_lmd(&fsh_handle);
         //set_pixel_color_lmd(out_frame_buffer, p1, {0xff0000ff});
         return;
     }
@@ -463,7 +498,6 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
 
     dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer_from.cap), itpl_buffer_from.cap};
     dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer_from.cap), itpl_buffer_from.cap};
-
     fsh_handle.itpl_vector = cur_itpl_buffer;
 
     sbuff<f32*, 2> itpl_buffer_p = {&itpl_buffer_from[0], &itpl_buffer_to[0]};
@@ -499,7 +533,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
             }
 
             fsh_handle.point = {x, y};
-            // fragment_shader_lmd(&fsh_handle);
+            fragment_shader_lmd(&fsh_handle);
             //set_pixel_color_lmd(out_frame_buffer, {x, y}, {0xff0000ff});
 
 
@@ -538,7 +572,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
             }
 
             fsh_handle.point = {x, y};
-            // fragment_shader_lmd(&fsh_handle);
+            fragment_shader_lmd(&fsh_handle);
             //set_pixel_color_lmd(out_frame_buffer, {x, y}, {0xff0000ff});
 
 
@@ -563,7 +597,7 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
     }
 
     fsh_handle.point = p2;
-    // fragment_shader_lmd(&fsh_handle);
+    fragment_shader_lmd(&fsh_handle);
     //set_pixel_color_lmd(out_frame_buffer, p2, {0xff0000ff});
 
 }

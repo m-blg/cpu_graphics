@@ -37,6 +37,12 @@ sbuff<u32[3], 10> cube_triangles = {{
     {0, 1, 6}
 }};
 
+sbuff<u32[2], 12> cube_edges = {{
+    {0, 1}, {0, 3}, {1, 2}, {2, 3},
+    {4, 5}, {4, 7}, {6, 5}, {6, 7},
+    {0, 6}, {1, 7}, {2, 6}, {3, 7},
+}};
+
 Mesh cube_mesh = {{(u8*)cube_vertices.buffer, cap(&cube_vertices) * (u32)sizeof(Tuple<vec3f, vec4f>)}, {cube_triangles.buffer, cap(&cube_triangles)}};
 
 vec3f cube_position = { 0, 0, 3};
@@ -231,7 +237,9 @@ void game_update() {
 
 
     Shader_Pack shaders = {test_color_itpl_vsh, &vsh_args, test_color_itpl_fsh, &z_buffer, 5};
-    draw_triangles(&frame_buffer, &vb, &robj.mesh->index_buffer, &shaders, &proc_buffer);
+    // draw_triangles(&frame_buffer, &vb, &robj.mesh->index_buffer, &shaders, &proc_buffer);
+    dbuff<u32[2]> edges_ib = {cube_edges.buffer, cap(&cube_edges)};
+    draw_lines(&frame_buffer, &vb, &edges_ib, &shaders, &proc_buffer);
 
 
     vec2i pointer_local_pos = Input::mouse_pos/4;
