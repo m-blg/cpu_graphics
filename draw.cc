@@ -5,7 +5,7 @@
 #include "cp_lib/vector.cc"
 #include "cp_lib/math.cc"
 #include <math.h>
-#include <libpng16/png.h>
+#include <SDL2/SDL_image.h>
 
 using namespace cp;
 
@@ -467,8 +467,8 @@ void rasterize_triangle_scanline(dbuff2<u32> *buffer, vec2i p0, vec2i p1, vec2i 
 
 
 void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f out_slope_itpl_buffer, 
-        vec2i p1, vec2i p2, dbufff itpl_buffer_from, dbufff itpl_buffer_to, 
-        void (*fragment_shader_lmd)(void*), 
+        vec2i p1, vec2i p2, f32* itpl_buffer_from, f32* itpl_buffer_to, 
+        u32 itpl_vector_len, void (*fragment_shader_lmd)(void*), 
         void* frag_shader_args, void (*set_pixel_color_lmd)(dbuff2u*, vec2i, Color)) {
 
     Fragment_Shader_Handle fsh_handle = {};
@@ -480,12 +480,12 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
         out_bounds[0] = p1.x;
 
         // write interpolation data
-        for (u32 i = 0; i < cap(&itpl_buffer_from); i++) {
+        for (u32 i = 0; i < itpl_vector_len; i++) {
             out_slope_itpl_buffer.get(0, i) = itpl_buffer_from[i];
         }
 
         fsh_handle.point = p1;
-        fsh_handle.itpl_vector = itpl_buffer_from;
+        fsh_handle.itpl_vector = { itpl_buffer_from, itpl_vector_len };
 
         fragment_shader_lmd(&fsh_handle);
         //set_pixel_color_lmd(out_frame_buffer, p1, {0xff0000ff});
@@ -496,11 +496,11 @@ void write_slope_x_bound(dbuff2u *out_frame_buffer, dbuffi out_bounds, dbuff2f o
     i32 adelta_x = abs(p2.x - p1.x);
     i32 adelta_y = abs(p2.y - p1.y);
 
-    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_buffer_from.cap), itpl_buffer_from.cap};
-    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_buffer_from.cap), itpl_buffer_from.cap};
+    dbufff cur_itpl_buffer = {(f32*)alloca(sizeof(f32) * itpl_vector_len), itpl_vector_len};
+    dbufff cur_itpl_deltas = {(f32*)alloca(sizeof(f32) * itpl_vector_len), itpl_vector_len};
     fsh_handle.itpl_vector = cur_itpl_buffer;
 
-    sbuff<f32*, 2> itpl_buffer_p = {&itpl_buffer_from[0], &itpl_buffer_to[0]};
+    sbuff<f32*, 2> itpl_buffer_p = {itpl_buffer_from, &itpl_buffer_to[0]};
 
 
     i32 delta_x = p2.x - p1.x;
@@ -634,33 +634,33 @@ void rasterize_triangle_scanline(dbuff2<u32> *out_frame_buffer, vec2i p0, vec2i 
 
     if (is_right_bended) {
         write_slope_x_bound(out_frame_buffer, bound_buffer, slope_itpl_buffer, p0, p2, 
-                {&itpl_buffer_p[0][0], itpl_vector_len}, {&itpl_buffer_p[2][0], itpl_vector_len}, 
+                itpl_buffer_p[0], itpl_buffer_p[2], itpl_vector_len, 
                 fragment_shader_lmd, frag_shader_args, set_pixel_color_lmd); 
 
         write_slope_x_bound(out_frame_buffer, {bound_buffer.buffer + long_edge_hight, bound_buffer.cap}, 
                 {&slope_itpl_buffer.get(long_edge_hight, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
-                p0, p1, {&itpl_buffer_p[0][0], itpl_vector_len}, {&itpl_buffer_p[1][0], itpl_vector_len}, 
+                p0, p1, itpl_buffer_p[0], itpl_buffer_p[1], itpl_vector_len, 
                 fragment_shader_lmd, frag_shader_args, set_pixel_color_lmd); 
 
         // long_edge_height + short_top_edge_height - 1 cause heights have 1 pixel overlap
         write_slope_x_bound(out_frame_buffer, {bound_buffer.buffer + long_edge_hight + short_top_edge_hight - 1, bound_buffer.cap}, 
                 {&slope_itpl_buffer.get(long_edge_hight + short_top_edge_hight - 1, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
-                p1, p2, {&itpl_buffer_p[1][0], itpl_vector_len}, {&itpl_buffer_p[2][0], itpl_vector_len}, 
+                p1, p2, itpl_buffer_p[1], itpl_buffer_p[2], itpl_vector_len, 
                 fragment_shader_lmd, frag_shader_args, set_pixel_color_lmd); 
     } else {
         write_slope_x_bound(out_frame_buffer, bound_buffer, slope_itpl_buffer, p0, p1, 
-                {&itpl_buffer_p[0][0], itpl_vector_len}, {&itpl_buffer_p[1][0], itpl_vector_len}, 
+                itpl_buffer_p[0], itpl_buffer_p[1], itpl_vector_len, 
                 fragment_shader_lmd, frag_shader_args, set_pixel_color_lmd); 
 
 
         write_slope_x_bound(out_frame_buffer, {bound_buffer.buffer + short_top_edge_hight, bound_buffer.cap}, 
                 {&slope_itpl_buffer.get(short_top_edge_hight, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
-                p1, p2, {&itpl_buffer_p[1][0], itpl_vector_len}, {&itpl_buffer_p[2][0], itpl_vector_len}, 
+                p1, p2, itpl_buffer_p[1], itpl_buffer_p[2], itpl_vector_len, 
                 fragment_shader_lmd, frag_shader_args, set_pixel_color_lmd); 
 
         write_slope_x_bound(out_frame_buffer, {bound_buffer.buffer + long_edge_hight, bound_buffer.cap}, 
                 {&slope_itpl_buffer.get(long_edge_hight, 0), slope_itpl_buffer.y_cap, slope_itpl_buffer.x_cap}, 
-                p0, p2, {&itpl_buffer_p[0][0], itpl_vector_len}, {&itpl_buffer_p[2][0], itpl_vector_len}, 
+                p0, p2, itpl_buffer_p[0], itpl_buffer_p[2], itpl_vector_len, 
                 fragment_shader_lmd, frag_shader_args, set_pixel_color_lmd); 
     }
 
@@ -794,10 +794,10 @@ void clear_buffer(dbuff2u *out_frame_buffer, Color clear_color) {
 }
 
 
-void draw_triangles(dbuff2u *out_frame_buffer, Vertex_Buffer *vb, dbuff<u32[3]> *ib, 
+void draw_triangles(dbuff2u *out_frame_buffer, desbuff *vb, dbuff<u32[3]> *ib, 
         Shader_Pack *shaders, dbuff<u8> *pr_buffer) {
 
-    Vertex_Buffer pr_vertices = {{pr_buffer->buffer, 0}, (u32)(sizeof(vec2i) + sizeof(f32) * shaders->itpl_vector_len)};
+    desbuff pr_vertices = {{pr_buffer->buffer, 0}, (u32)(sizeof(vec2i) + sizeof(f32) * shaders->itpl_vector_len)};
     pr_vertices.buffer.cap = cap(&vb->buffer) / vb->stride * pr_vertices.stride;
     dbuff<u8> tr_rast_pr_buffer = { pr_buffer->buffer + cap(&pr_vertices.buffer), cap(pr_buffer) - cap(&pr_vertices.buffer) };
 

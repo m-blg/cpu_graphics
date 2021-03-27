@@ -1,8 +1,10 @@
 #include "../SDL_main.cc"
+#include <SDL2/SDL_image.h>
 
 #include "cp_lib/basic.cc"
 #include "cp_lib/array.cc"
 #include "cp_lib/vector.cc"
+#include "cp_lib/matrix.cc"
 #include "cp_lib/memory.cc"
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,38 +14,24 @@
 
 using namespace cp;
 
-sbuff<Tuple<vec3f, vec4f>, 8> cube_vertices = {{
-    { { -1, -1, -1 }, {{1, 1, 0, 0}} },
-	{ { 1, -1, -1 }, {{1, 0, 1, 0}} },
-	{ { 1, 1, -1 }, {{1, 0, 0, 1}} },
-	{ { -1, 1, -1 }, {{1, 1, 0, 0}} },
-	{ { -1, 1, 1 }, {{1, 0, 1, 0}} },
-	{ { 1, 1, 1 }, {{1, 0, 0, 1}} },
-	{ { 1, -1, 1 }, {{1, 1, 0, 0}} },
-	{ { -1, -1, 1 }, {{1, 0, 0, 1}} }
+sbuff<Tuple<vec3f, vec2f, vec4f>, 4> cube_vertices = {{
+    { { -1, -1, -1 }, { {0, 0}, {{1, 1, 0, 0}} } },
+	{ { 1, -1, -1 }, { {1, 0}, {{1, 0, 1, 0}} } },
+	{ { 1, 1, -1 }, { {1, 1}, {{1, 0, 0, 1}} } },
+	{ { -1, 1, -1 }, { {0, 1}, {{1, 1, 0, 0}} } }
 }};
 sbuff<u32[3], 10> cube_triangles = {{
-    //{0, 2, 1}, //face front
-    //{0, 3, 2},
-    {2, 3, 4}, //face top
-    {2, 4, 5},
-    {1, 2, 5}, //face right
-    {1, 5, 6},
-    {0, 7, 4}, //face left
-    {0, 4, 3},
-    {5, 4, 7}, //face back
-    {5, 7, 6},
-    {0, 6, 7}, //face bottom
-    {0, 1, 6}
+    {0, 2, 1}, //face front
+    {0, 3, 2},
 }};
 
-sbuff<u32[2], 12> cube_edges = {{
-    {0, 1}, {0, 3}, {1, 2}, {2, 3},
-    {4, 5}, {4, 7}, {6, 5}, {6, 7},
-    {0, 7}, {1, 6}, {2, 5}, {3, 4},
-}};
+// sbuff<u32[2], 12> cube_edges = {{
+//     {0, 1}, {0, 3}, {1, 2}, {2, 3},
+//     {4, 5}, {4, 7}, {6, 5}, {6, 7},
+//     {0, 7}, {1, 6}, {2, 5}, {3, 4},
+// }};
 
-Mesh cube_mesh = {{(u8*)cube_vertices.buffer, cap(&cube_vertices) * (u32)sizeof(Tuple<vec3f, vec4f>)}, {cube_triangles.buffer, cap(&cube_triangles)}};
+Mesh cube_mesh = {{(u8*)cube_vertices.buffer, cap(&cube_vertices) * (u32)sizeof(Tuple<vec3f, vec2f, vec4f>)}, {cube_triangles.buffer, cap(&cube_triangles)}};
 
 vec3f cube_position = { 0, 0, 3};
 quat cube_rotation = {1, 0, 0, 0};
@@ -69,22 +57,26 @@ static quat rot_x;
 static quat rot_y;
 static quat rot_z;
 
+dbuff2u test_texture;
+
 
 void test_color_itpl_vsh(void* handle_p) {
     auto handle = (Vertex_Shader_Handle*)handle_p;
 
-    auto vertex = (Tuple<vec3f, vec4f>*)handle->vertex;
+    auto vertex = (Tuple<vec3f, vec2f, vec4f>*)handle->vertex;
     
-    auto t_args = (Tuple<Render_Object*, vec2f(*)(vec3f)>*)handle->args;
-    Render_Object* obj = t_args->get<0>();
+    auto t_args = (Tuple<mat4f*, vec2f(*)(vec3f)>*)handle->args;
+    mat4f* affine_m = t_args->get<0>();
     vec2f(*project_lmd)(vec3f) = t_args->get<1>();
 
-    vec3f p = *obj->rotation * vertex->get<0>() + *obj->position;
-    vec2f pr = project_lmd(p);
+    vec4f vertex_pos = { vertex->get<0>().x, vertex->get<0>().y, vertex->get<0>().z, 1 };
+    vec4f p = *affine_m * vertex_pos;
+    vec2f pr = project_lmd({p.x, p.y, p.z});
 
     handle->out_vertex_itpl_vector[0] = p.z;
-    *(vec4f*)&handle->out_vertex_itpl_vector[1] = vertex->get<1>();
-    *handle->out_vertex_position = space_to_screen_coord(pr, window_size/4, {25, 25});
+    *(vec2f*)&handle->out_vertex_itpl_vector[1] = vertex->get<1>();
+    *(vec4f*)&handle->out_vertex_itpl_vector[3] = vertex->get<2>();
+    *handle->out_vertex_position = space_to_screen_coord(pr, window_size, {100, 100});
 }
 
 
@@ -108,6 +100,29 @@ void test_color_itpl_fsh(void* args) {
     *prev_z = z;
 }
 
+void test_texture_fsh(void* args) {
+    auto handle = (Fragment_Shader_Handle*)args;
+
+    float z = handle->itpl_vector[0];
+    auto args_tuple = (Tuple<dbuff2f*, dbuff2u*>*)handle->args;
+    dbuff2f *z_buffer = args_tuple->get<0>(); 
+    f32* prev_z;
+    if (!z_buffer->sget(&prev_z, handle->point.y, handle->point.x) || z > *prev_z)
+        return;
+    
+    dbuff2u *texture = args_tuple->get<1>();
+    vec2f *itpl_uv = (vec2f*)&handle->itpl_vector[1];
+    vec2i uv = { (i32)(texture->x_cap * itpl_uv->u), (i32)(texture->y_cap * itpl_uv->v) };
+    Color color = { texture->get(uv.y, uv.x) }; 
+    if (color.a < 1) return;
+    // if (abs(z) != 0) { 
+    //     color = to_color( *fcolor / z);
+    // } else 
+    //     color = {0xffffffff};
+    handle->set_pixel_color_lmd(handle->out_frame_buffer, handle->point, color);
+    *prev_z = z;
+}
+
 
 void game_init() {
     input_init();
@@ -122,9 +137,25 @@ void game_init() {
     frame_buffer.init(window_size.y/4, window_size.x/4);
     z_buffer.init(window_size.y/4, window_size.x/4);
 
+    frame_buffer.init(window_size.y, window_size.x);
+    z_buffer.init(window_size.y, window_size.x);
+
     rot_x.init(normalized(vec3f{1, 0, 0}), M_PI/10);
     rot_y.init(normalized(vec3f{0, 1, 0}), M_PI/10);
     rot_z.init(normalized(vec3f{0, 0, 1}), M_PI/10);
+
+    SDL_Init(SDL_INIT_VIDEO);
+
+    int flags = IMG_INIT_PNG;
+    if ( !( IMG_Init( flags ) & flags ) ) {
+        printf("Can't init image: %i\n", IMG_GetError());
+        assert(false);
+    }
+
+    TTF_Init();
+
+    SDL_Surface *test_texture_sur = IMG_Load("Test/Assets/TestTexture.png");
+    test_texture = { (u32*)test_texture_sur->pixels, test_texture_sur->h, test_texture_sur->w };
 }
 
 void game_shut() {
@@ -170,6 +201,12 @@ void game_update() {
     }
     if (get_bit(Input::keys_hold, 'h')) {
         cube_rotation = inverse(rot_y) * cube_rotation;
+    }
+    if (get_bit(Input::keys_hold, 'r')) {
+        cube_rotation = rot_z * cube_rotation;
+    }
+    if (get_bit(Input::keys_hold, 'y')) {
+        cube_rotation = inverse(rot_z) * cube_rotation;
     }
 
     // write to buffer
@@ -226,26 +263,41 @@ void game_update() {
 
 
     Render_Object robj = {&cube_mesh, &cube_position, &cube_rotation};
-    Vertex_Buffer vb = {{(u8*)robj.mesh->vertex_buffer.buffer, robj.mesh->vertex_buffer.cap}, sizeof(Tuple<vec3f, vec4f>)};
+    desbuff vb = {{(u8*)robj.mesh->vertex_buffer.buffer, robj.mesh->vertex_buffer.cap}, sizeof(Tuple<vec3f, vec2f, vec4f>)};
 
-    Tuple<Render_Object*, vec2f(*)(vec3f)> vsh_args;
-    vsh_args.get<0>() = &robj;
+    Tuple<mat4f*, vec2f(*)(vec3f)> vsh_args;
+    mat4f scale_m = {
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+    };
+    mat4f rotation_m = vec_rot_mat4(cube_rotation);
+    mat4f translation_m = {
+        1, 0, 0, cube_position.x,
+        0, 1, 0, cube_position.y,
+        0, 0, 1, cube_position.z,
+        0, 0, 0, 1
+    };
+    mat4f affine_m = translation_m * rotation_m * scale_m;
+    vsh_args.get<0>() = &affine_m;
     if (is_ortho) {
         vsh_args.get<1>() = project_xy_orthogonal;
     } else 
         vsh_args.get<1>() = project_xy_perspective;
 
 
-    Shader_Pack shaders = {test_color_itpl_vsh, &vsh_args, test_color_itpl_fsh, &z_buffer, 5};
-    // draw_triangles(&frame_buffer, &vb, &robj.mesh->index_buffer, &shaders, &proc_buffer);
-    dbuff<u32[2]> edges_ib = {cube_edges.buffer, cap(&cube_edges)};
-    draw_lines(&frame_buffer, &vb, &edges_ib, &shaders, &proc_buffer);
+    Tuple<dbuff2f*, dbuff2u*> fsh_arg_tupple = { &z_buffer, {&test_texture} };
+    Shader_Pack shaders = {test_color_itpl_vsh, &vsh_args, test_texture_fsh, &fsh_arg_tupple, 7};
+    draw_triangles(&frame_buffer, &vb, &robj.mesh->index_buffer, &shaders, &proc_buffer);
+    // dbuff<u32[2]> edges_ib = {cube_edges.buffer, cap(&cube_edges)};
+    // draw_lines(&frame_buffer, &vb, &edges_ib, &shaders, &proc_buffer);
 
 
     vec2i pointer_local_pos = Input::mouse_pos/4;
     if (0 < pointer_local_pos.x - 5 && pointer_local_pos.x - 5 < window_size.x/4 && 0 < pointer_local_pos.y - 5 && pointer_local_pos.y - 5 < window_size.y/4) {
         frame_buffer.get(pointer_local_pos.y-5, pointer_local_pos.x-5) = 0xffff0000;
-        printf("%i %i\n", pointer_local_pos.x-5, pointer_local_pos.y-5);
+        // printf("%i %i\n", pointer_localq_pos.x-5, pointer_local_pos.y-5);
     }
     
 

@@ -2,8 +2,10 @@
 
 #include <SDL2/SDL.h> 
 #include <SDL2/SDL_timer.h> 
+#include <SDL2/SDL_ttf.h> 
 #include "cp_lib/basic.cc"
 #include "cp_lib/vector.cc"
+#include <time.h>
 
 #include "game.cc"
 
@@ -17,7 +19,10 @@ int main()
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, 0);
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, frame_buffer.x_cap, frame_buffer.y_cap);
 
+    TTF_Font* ui_font = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSans.ttf", 24);
+    SDL_Color ui_font_color = {200, 200, 200}; 
 
+    clock_t prev_clock = clock();
     while (is_running) {
         for (u32 i = 0; i < Input::keys_down.cap; i++) {
             Input::keys_down.buffer[i] = 0;
@@ -60,14 +65,33 @@ int main()
             }
         }
 
+        clock_t new_clock = clock();
+        f32 dt = (f32)(new_clock - prev_clock) * 1000 / CLOCKS_PER_SEC;
+        prev_clock = new_clock;
+
         game_update();
 
         SDL_UpdateTexture(texture, nullptr, frame_buffer.buffer, frame_buffer.x_cap * sizeof(u32));
+
+
+        char fps_str_buff[20];
+        sprintf(fps_str_buff, "%f", 1000/dt);
+
+        SDL_Surface* fps_text_sur = TTF_RenderText_Solid(ui_font, fps_str_buff, ui_font_color);
+
+        SDL_Texture * fps_text_texture = SDL_CreateTextureFromSurface(renderer, fps_text_sur);
+        SDL_Rect fps_text_sur_blit_rect = { 0, 0, fps_text_sur->w, fps_text_sur->h };
+        // SDL_LockSurface(fps_text_sur);
+        // SDL_UpdateTexture(texture, &fps_text_sur_blit_rect, fps_text_sur->pixels, fps_text_sur->pitch);
+        // SDL_UnlockSurface(fps_text_sur);
+
+
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+        SDL_RenderCopy(renderer, fps_text_texture, nullptr, &fps_text_sur_blit_rect);
         SDL_RenderPresent(renderer);
 
-        SDL_Delay(1000/30);
+        SDL_Delay(1000/60);
     }
 
     game_shut();
