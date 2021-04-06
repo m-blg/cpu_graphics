@@ -91,7 +91,7 @@ struct Fragment_Shader_Handle {
 
 
 
-vec2i space_to_screen_coord(vec2i v, vec2i window_size, vec2i pixels_per_unit) {
+vec2i space_to_screen_coordi(vec2i v, vec2i window_size, vec2i pixels_per_unit) {
     return {window_size.x / 2 + v.x * pixels_per_unit.x, window_size.y / 2 - v.y * pixels_per_unit.y};
 }
 vec2i space_to_screen_coord(vec2f v, vec2i window_size, vec2i pixels_per_unit) {
